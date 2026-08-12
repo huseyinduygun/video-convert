@@ -1,0 +1,33 @@
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# Virtual Environments
+venv/
+.venv/
+env/
+ENV/
+
+# IDEs & Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Temporary & Backup files
+*.bak
+*.tmp
+*.log
+
+# Modal & Build Cache
+.modal/
+.modal_cache/
+
+# Environment & Secrets
+.env
+*.env
+*.key
+*.pem
