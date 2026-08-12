@@ -139,7 +139,10 @@ def cpu_process_stage(
                         f"[s{idx}]scale={p['calc_w']}:{p['calc_h']},format=yuv420p[main{idx}];[main{idx}][1:v]overlay={overlay_expr},format=yuv420p[v{idx}]"
                     )
 
-        # Video varyantları
+        # Video varyantları için vCPU çekirdeklerini (8 çekirdek) çakışmayacak şekilde bölüyoruz
+        # 3 profil için profil başına 2 thread (toplam 6 thread + 2 filter thread = 8 vCPU tam uyum)
+        threads_per_stream = max(2, int(8 / max(1, n)))
+
         for idx, p in enumerate(active_profiles):
             variant_dir = f"{work_dir}/{p['name']}"
             os.makedirs(variant_dir, exist_ok=True)
@@ -147,11 +150,12 @@ def cpu_process_stage(
 
             stream_args = [
                 "-map", f"[v{idx}]",
-                "-threads", "0",
+                "-threads", str(threads_per_stream),
                 "-pix_fmt", "yuv420p",
                 "-c:v", "libx264", "-crf", p["crf"],
                 "-b:v", p["bitrate"], "-maxrate", p["maxrate"], "-bufsize", p["bufsize"],
                 "-preset", "superfast",
+                "-x264-params", f"threads={threads_per_stream}:sliced-threads=1",
                 "-g", "120", "-keyint_min", "60",
                 "-an",
                 "-hls_time", "6",
