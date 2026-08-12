@@ -8,7 +8,7 @@ from ..config import app, DEFAULT_TARGET_DIR
 from ..core import image_cpu, verify_request_auth
 
 
-@app.function(image=image_cpu)
+@app.function(image=image_cpu, cpu=0.125, memory=256)
 @modal.fastapi_endpoint(method="POST")
 def delete_request(data: dict):
     if not verify_request_auth(data):

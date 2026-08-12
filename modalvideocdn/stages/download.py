@@ -6,12 +6,12 @@ import time
 import json
 
 from ..config import app, volume
-from ..core import image_cpu, ProgressTracker, setup_cancellation_and_timeout_handlers, detect_optimal_connections
+from ..core import image_cpu, ProgressTracker, setup_cancellation_and_timeout_handlers, detect_optimal_connections, cleanup_stale_volume_files
 from .cpu import cpu_process_stage
 from .gpu import gpu_process_stage
 
 
-@app.function(image=image_cpu, cpu=1.0, timeout=600, volumes={"/vol": volume})
+@app.function(image=image_cpu, cpu=0.25, memory=1024, timeout=600, scaledown_window=0, volumes={"/vol": volume})
 def download_stage(
     video_url: str, webhook_url: str, video_id: str, custom_id: str,
     username: str, server_config: dict, start_time: float,
@@ -31,6 +31,8 @@ def download_stage(
     setup_cancellation_and_timeout_handlers(tracker, start_time, work_dir)
 
     try:
+        volume.reload()
+        cleanup_stale_volume_files(max_age_seconds=7200)
         if poster_url:
             print(f"[{video_id}] Kapak fotoğrafı indiriliyor → {poster_url}")
             try:

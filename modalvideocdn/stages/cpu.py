@@ -18,7 +18,7 @@ from ..core import (
 from .upload import upload_stage
 
 
-@app.function(image=image_cpu, cpu=8.0, timeout=1800, volumes={"/vol": volume})
+@app.function(image=image_cpu, cpu=8.0, memory=8192, timeout=1800, scaledown_window=0, volumes={"/vol": volume})
 def cpu_process_stage(
     video_url: str, webhook_url: str, video_id: str, custom_id: str,
     username: str, server_config: dict, start_time: float,

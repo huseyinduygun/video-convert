@@ -264,3 +264,31 @@ def calc_target_dim(orig_w: int, orig_h: int, target_h: int):
     if new_w % 2 != 0:
         new_w += 1
     return new_w, target_h
+
+
+def cleanup_stale_volume_files(max_age_seconds: int = 7200):
+    """
+    /vol dizinindeki 2 saatten (7200 saniye) eski çöp kalıntı klasörleri otomatik olarak siler.
+    Hiçbir çöken veya zaman aşımına uğrayan işleme ait dosyanın diskte yer kaplamamasını sağlar.
+    """
+    try:
+        vol_root = "/vol"
+        if not os.path.exists(vol_root):
+            return
+        now = time.time()
+        cleaned_count = 0
+        for item in os.listdir(vol_root):
+            item_path = os.path.join(vol_root, item)
+            if os.path.isdir(item_path):
+                mtime = os.path.getmtime(item_path)
+                if (now - mtime) > max_age_seconds:
+                    import shutil
+                    print(f"[Volume Safety] 2 saatten eski çöp klasör siliniyor: {item_path}")
+                    shutil.rmtree(item_path, ignore_errors=True)
+                    cleaned_count += 1
+        if cleaned_count > 0:
+            from ..config import volume
+            volume.commit()
+            print(f"[Volume Safety] {cleaned_count} adet çöp klasör temizlendi ve Volume commit edildi.")
+    except Exception as err:
+        print(f"[Volume Safety] Temizlik uyarısı: {err}")

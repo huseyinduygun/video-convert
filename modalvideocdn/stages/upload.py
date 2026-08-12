@@ -9,7 +9,7 @@ from ..config import app, volume
 from ..core import image_cpu, ProgressTracker, setup_cancellation_and_timeout_handlers, build_web_base_url
 
 
-@app.function(image=image_cpu, cpu=1.0, timeout=1200, volumes={"/vol": volume})
+@app.function(image=image_cpu, cpu=0.25, memory=1024, timeout=1200, scaledown_window=0, volumes={"/vol": volume})
 def upload_stage(
     video_url: str, webhook_url: str, video_id: str, custom_id: str,
     username: str, server_config: dict, start_time: float, target_qualities: list

@@ -9,7 +9,7 @@ from ..core import image_cpu, verify_request_auth, check_storage_server_connecti
 from ..stages import download_stage
 
 
-@app.function(image=image_cpu)
+@app.function(image=image_cpu, cpu=0.125, memory=256)
 @modal.fastapi_endpoint(method="POST")
 def convert_request(data: dict):
     if not verify_request_auth(data):

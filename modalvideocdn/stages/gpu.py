@@ -17,7 +17,7 @@ from ..core import (
 from .upload import upload_stage
 
 
-@app.function(image=image_gpu, gpu="T4", cpu=2.0, memory=4096, timeout=1800, scaledown_window=2, volumes={"/vol": volume})
+@app.function(image=image_gpu, gpu="T4", cpu=1.0, memory=2048, timeout=1800, scaledown_window=0, volumes={"/vol": volume})
 def gpu_process_stage(
     video_url: str, webhook_url: str, video_id: str, custom_id: str,
     username: str, server_config: dict, start_time: float,

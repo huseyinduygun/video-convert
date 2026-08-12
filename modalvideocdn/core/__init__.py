@@ -9,6 +9,7 @@ from .utils import (
     generate_timeline_sprite_and_vtt,
     generate_metadata_and_poster,
     calc_target_dim,
+    cleanup_stale_volume_files,
 )
 
 __all__ = [
@@ -26,4 +27,5 @@ __all__ = [
     "generate_timeline_sprite_and_vtt",
     "generate_metadata_and_poster",
     "calc_target_dim",
+    "cleanup_stale_volume_files",
 ]
