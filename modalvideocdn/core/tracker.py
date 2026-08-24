@@ -26,6 +26,27 @@ def send_webhook_sync(webhook_url: str, payload: dict):
               f"({payload.get('step')}, %{payload.get('progress')}): {err}")
 
 
+class TaskCancelledOrTimeout(Exception):
+    pass
+
+
+def check_and_raise_cancellation(video_id: str, work_dir: str = None):
+    """
+    Volume üzerindeki /vol/{video_id}/cancel.flag varlığını denetler.
+    Eğer bayrak bulunduysa klasörü temizler ve TaskCancelledOrTimeout hatası fırlatır.
+    """
+    target_dir = work_dir or f"/vol/{video_id}"
+    flag_file = f"{target_dir}/cancel.flag"
+    if os.path.exists(flag_file):
+        print(f"[{video_id}] Durdurma bayrağı (/vol/{video_id}/cancel.flag) tespit edildi! İşlem sonlandırılıyor...")
+        if os.path.exists(target_dir):
+            try:
+                shutil.rmtree(target_dir, ignore_errors=True)
+            except Exception:
+                pass
+        raise TaskCancelledOrTimeout("İşlem kullanıcı tarafından API (/cancel_request) ile durduruldu.")
+
+
 class ProgressTracker:
     def __init__(self, webhook_url: str, video_id: str, custom_id: str):
         self.webhook_url = webhook_url
@@ -36,6 +57,7 @@ class ProgressTracker:
         self.lock = threading.Lock()
 
     def send_event(self, step: str, progress: int = None, status="processing", extra=None):
+        check_and_raise_cancellation(self.video_id)
         with self.lock:
             pct = progress if progress is not None else (self.last_sent_step if self.last_sent_step >= 0 else 0)
 

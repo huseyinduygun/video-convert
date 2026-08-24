@@ -13,7 +13,7 @@ image_cpu = (
         "mv /tmp/ffmpeg-static/ffprobe /usr/local/bin/ffprobe && "
         "rm -rf /tmp/ffmpeg-static /tmp/ffmpeg.tar.xz"
     )
-    .pip_install("requests", "fastapi[standard]")
+    .pip_install("requests", "fastapi[standard]", "psutil")
 )
 
 # ============================================================
@@ -72,7 +72,7 @@ image_gpu = (
         # 6. Temizlik
         "rm -rf /tmp/ffmpeg-src /tmp/ffmpeg.tar.xz /tmp/nv-codec-headers",
     )
-    .pip_install("requests", "fastapi[standard]")
+    .pip_install("requests", "fastapi[standard]", "psutil")
     .env({
         "PATH": "/usr/local/cuda/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
         "LD_LIBRARY_PATH": "/usr/local/cuda/lib64:/usr/local/lib"

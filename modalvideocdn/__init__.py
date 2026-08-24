@@ -34,9 +34,10 @@ from .core import (
     generate_timeline_sprite_and_vtt,
     generate_metadata_and_poster,
     calc_target_dim,
+    auto_cleanup_cron,
 )
 from .stages import download_stage, cpu_process_stage, gpu_process_stage, upload_stage
-from .endpoints import convert_request, delete_request
+from .endpoints import convert_request, delete_request, cancel_request
 
 __all__ = [
     "app",
@@ -49,4 +50,6 @@ __all__ = [
     "upload_stage",
     "convert_request",
     "delete_request",
+    "cancel_request",
+    "auto_cleanup_cron",
 ]

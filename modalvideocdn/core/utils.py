@@ -10,7 +10,140 @@ import math
 
 import requests
 
-from ..config.settings import ADMIN_TOKEN, SECRET_KEY
+from ..config.settings import (
+    ADMIN_TOKEN, SECRET_KEY, STAGE_CFG_DOWNLOAD, STAGE_CFG_ENCODE_CPU,
+    STAGE_CFG_ENCODE_GPU, STAGE_CFG_UPLOAD, PRICING_VCPU_SEC,
+    PRICING_RAM_GB_SEC, PRICING_ACTIVE_GPU_SEC, PRICING_GPU_MAP
+)
+
+
+def get_container_allocated_cpu(default_cpu: float = 8.0) -> str:
+    """Modal'ın atadığı vCPU miktarını MODAL_CPUS ortam değişkeninden okur.
+    Bu sayede cgroup v1/v2 üzerinde host'un toplam CPU sayısını yanlış rapor etme
+    sorununun önüne geçilir. Değişken yoksa default_cpu kullanılır."""
+    try:
+        modal_cpus = os.environ.get("MODAL_CPUS")
+        if modal_cpus:
+            val = round(float(modal_cpus), 2)
+            return f"{int(val) if val == int(val) else val}"
+    except Exception:
+        pass
+    val = round(default_cpu, 2)
+    return f"{int(val) if val == int(val) else val}"
+
+
+def calc_optimal_cpu(
+    height: int,
+    duration_sec: float,
+    quality_count: int,
+    max_cpu: float = 8.0,
+) -> float:
+    """Video özelliklerine göre libx264 encode için optimal vCPU sayısını hesaplar.
+
+    Mantık:
+      - Her kalite seviyesi için çözünürlüğe bağlı bir thread ihtiyacı belirlenir.
+      - 4K → 4 thread/kalite, 1080p → 3, 720p → 2, 480p ve altı → 1
+      - Toplam ihtiyaç quality_count ile çarpılır, minimum 1, max_cpu ile sınırlanır.
+      - Uzun videolar (>10 dk) için küçük bir çarpan eklenir.
+    """
+    if height >= 2160:
+        threads_per_quality = 4
+    elif height >= 1080:
+        threads_per_quality = 3
+    elif height >= 720:
+        threads_per_quality = 2
+    else:
+        threads_per_quality = 1
+
+    base = threads_per_quality * max(1, quality_count)
+
+    # 10 dakikayı aşan videolar için +1 ekstra
+    if duration_sec > 600:
+        base += 1
+
+    # En yakın çift sayıya yuvarla (Modal CPU tahsisleri genellikle çiftli olur)
+    optimal = min(max_cpu, max(1.0, float(base)))
+    # 1, 2, 4, 8 kademelerine yuvarla
+    for step in [1.0, 2.0, 4.0, 8.0]:
+        if optimal <= step:
+            return step
+    return max_cpu
+
+
+import threading
+
+class ResourceMonitor:
+    def __init__(self, interval_sec: float = 0.5, is_gpu: bool = False):
+        self.interval = interval_sec
+        self.is_gpu = is_gpu
+        self._running = False
+        self._thread = None
+        self.cpu_samples = []
+        self.gpu_samples = []
+        self.gpu_mem_samples = []
+
+    def start(self):
+        self._running = True
+        self._thread = threading.Thread(target=self._monitor_loop, daemon=True)
+        self._thread.start()
+
+    def stop(self):
+        self._running = False
+        if self._thread:
+            self._thread.join(timeout=2.0)
+
+        res = {
+            "max_cpu_percent": round(max(self.cpu_samples), 1) if self.cpu_samples else 0.0,
+            "avg_cpu_percent": round(sum(self.cpu_samples) / len(self.cpu_samples), 1) if self.cpu_samples else 0.0,
+        }
+        if self.is_gpu:
+            res["max_gpu_percent"] = round(max(self.gpu_samples), 1) if self.gpu_samples else 0.0
+            res["avg_gpu_percent"] = round(sum(self.gpu_samples) / len(self.gpu_samples), 1) if self.gpu_samples else 0.0
+            res["max_gpu_memory_mb"] = int(max(self.gpu_mem_samples)) if self.gpu_mem_samples else 0
+        return res
+
+    def _monitor_loop(self):
+        try:
+            import psutil
+            parent_proc = psutil.Process()
+            parent_proc.cpu_percent(interval=None)
+            alloc_vcpus = float(os.environ.get("MODAL_CPUS", "4.0"))
+        except Exception:
+            psutil = None
+            parent_proc = None
+            alloc_vcpus = 4.0
+
+        while self._running:
+            try:
+                if psutil and parent_proc:
+                    tot_cpu = parent_proc.cpu_percent(interval=None)
+                    for child in parent_proc.children(recursive=True):
+                        try:
+                            tot_cpu += child.cpu_percent(interval=None)
+                        except Exception:
+                            pass
+                    norm_pct = min(100.0, round(tot_cpu / max(1.0, alloc_vcpus), 1))
+                    self.cpu_samples.append(norm_pct)
+            except Exception:
+                pass
+
+            if self.is_gpu:
+                try:
+                    gpu_p = subprocess.run(
+                        ["nvidia-smi", "--query-gpu=utilization.gpu,memory.used", "--format=csv,noheader,nounits"],
+                        capture_output=True, text=True, timeout=1
+                    )
+                    if gpu_p.returncode == 0 and gpu_p.stdout.strip():
+                        parts = gpu_p.stdout.strip().split("\n")[0].split(",")
+                        if len(parts) >= 2:
+                            g_util = float(parts[0].strip())
+                            g_mem = float(parts[1].strip())
+                            self.gpu_samples.append(g_util)
+                            self.gpu_mem_samples.append(g_mem)
+                except Exception:
+                    pass
+
+            time.sleep(self.interval)
 
 
 def build_web_base_url(cdn_domain: str, web_dir: str, username: str, video_id: str) -> str:
@@ -266,9 +399,9 @@ def calc_target_dim(orig_w: int, orig_h: int, target_h: int):
     return new_w, target_h
 
 
-def cleanup_stale_volume_files(max_age_seconds: int = 7200):
+def cleanup_stale_volume_files(max_age_seconds: int = 1200):
     """
-    /vol dizinindeki 2 saatten (7200 saniye) eski çöp kalıntı klasörleri otomatik olarak siler.
+    /vol dizinindeki 20 dakikadan (1200 saniye) eski çöp kalıntı klasörleri otomatik olarak siler.
     Hiçbir çöken veya zaman aşımına uğrayan işleme ait dosyanın diskte yer kaplamamasını sağlar.
     """
     try:
@@ -283,7 +416,7 @@ def cleanup_stale_volume_files(max_age_seconds: int = 7200):
                 mtime = os.path.getmtime(item_path)
                 if (now - mtime) > max_age_seconds:
                     import shutil
-                    print(f"[Volume Safety] 2 saatten eski çöp klasör siliniyor: {item_path}")
+                    print(f"[Volume Safety] 20 dakikadan eski çöp klasör siliniyor: {item_path}")
                     shutil.rmtree(item_path, ignore_errors=True)
                     cleaned_count += 1
         if cleaned_count > 0:
@@ -292,3 +425,125 @@ def cleanup_stale_volume_files(max_age_seconds: int = 7200):
             print(f"[Volume Safety] {cleaned_count} adet çöp klasör temizlendi ve Volume commit edildi.")
     except Exception as err:
         print(f"[Volume Safety] Temizlik uyarısı: {err}")
+
+
+import modal
+from ..config import app, volume
+from .images import image_cpu
+
+@app.function(
+    schedule=modal.Cron("0 * * * *"),
+    volumes={"/vol": volume},
+    image=image_cpu,
+    cpu=0.125,
+    memory=256,
+    region="eu",
+    scaledown_window=2,
+    timeout=180
+)
+def auto_cleanup_cron():
+    """Modal tarafında saat başı otomatik çalışan arka plan temizlik botu."""
+    print("[Cron Safety] Saat başı periyodik Volume temizlik botu çalıştırıldı.")
+    cleanup_stale_volume_files(max_age_seconds=1200)
+
+
+def build_accumulated_perf_stats(work_dir: str, start_time: float) -> dict:
+    """Volume üzerindeki mevcut perf_*.json dosyalarını okur, o anki aşamaya kadar
+    birikmiş metrikleri ve tahmini birikmiş Modal maliyetini hesaplar.
+    """
+    dl_perf_file = f"{work_dir}/perf_download.json"
+    conv_perf_file = f"{work_dir}/perf_conversion.json"
+    up_perf_file = f"{work_dir}/perf_upload.json"
+
+    dl_perf = {}
+    if os.path.exists(dl_perf_file):
+        try:
+            with open(dl_perf_file, "r", encoding="utf-8") as f:
+                dl_perf = json.load(f)
+        except Exception:
+            pass
+
+    conv_perf = {}
+    if os.path.exists(conv_perf_file):
+        try:
+            with open(conv_perf_file, "r", encoding="utf-8") as f:
+                conv_perf = json.load(f)
+        except Exception:
+            pass
+
+    up_perf = {}
+    if os.path.exists(up_perf_file):
+        try:
+            with open(up_perf_file, "r", encoding="utf-8") as f:
+                up_perf = json.load(f)
+        except Exception:
+            pass
+
+    elapsed_sec = round(time.time() - start_time, 2)
+    raw_video_details = conv_perf.get("video_details", {})
+    video_details = dict(raw_video_details) if raw_video_details else {}
+
+    # Maliyet hesabı (Modal Konteyner Gerçek Execution Süreleri Üzerinden)
+    dl_sec = float(dl_perf.get("stage_execution_time_sec", dl_perf.get("download_time_sec", 0.0)))
+    dl_cost = dl_sec * (STAGE_CFG_DOWNLOAD["cpu"] * PRICING_VCPU_SEC + (STAGE_CFG_DOWNLOAD["memory"] / 1024.0) * PRICING_RAM_GB_SEC)
+
+    enc_sec = float(conv_perf.get("stage_execution_time_sec", conv_perf.get("conversion_time_sec", 0.0)))
+    is_gpu = "GPU" in conv_perf.get("engine", "")
+    enc_cpu_val = float(conv_perf.get("allocated_cpu", STAGE_CFG_ENCODE_CPU["cpu"] if not is_gpu else STAGE_CFG_ENCODE_GPU["cpu"]))
+    enc_ram_val = float(STAGE_CFG_ENCODE_CPU["memory"] if not is_gpu else STAGE_CFG_ENCODE_GPU["memory"])
+    detected_gpu = conv_perf.get("gpu_type")
+    if not detected_gpu and is_gpu:
+        engine_str = conv_perf.get("engine", "").upper()
+        for g_k in PRICING_GPU_MAP.keys():
+            if g_k in engine_str:
+                detected_gpu = g_k
+                break
+    gpu_type = detected_gpu or STAGE_CFG_ENCODE_GPU.get("gpu", "T4")
+    gpu_rate = PRICING_GPU_MAP.get(gpu_type, PRICING_ACTIVE_GPU_SEC)
+    gpu_addon_cost = (enc_sec * gpu_rate) if is_gpu else 0.0
+    enc_cost = (enc_sec * (enc_cpu_val * PRICING_VCPU_SEC + (enc_ram_val / 1024.0) * PRICING_RAM_GB_SEC)) + gpu_addon_cost
+
+    up_sec = float(up_perf.get("stage_execution_time_sec", up_perf.get("upload_duration_seconds", 0.0)))
+    up_cost = up_sec * (STAGE_CFG_UPLOAD["cpu"] * PRICING_VCPU_SEC + (STAGE_CFG_UPLOAD["memory"] / 1024.0) * PRICING_RAM_GB_SEC)
+
+    total_cost_usd = round(dl_cost + enc_cost + up_cost, 6)
+
+    stats = {
+        "total_elapsed_seconds": elapsed_sec,
+    }
+    if video_details:
+        stats["video_details"] = video_details
+    if conv_perf.get("engine"):
+        stats["engine_used"] = conv_perf["engine"]
+    if dl_perf:
+        stats["download_stage"] = dl_perf
+    if conv_perf:
+        # Shallow copy without polluting video_details
+        c_copy = dict(conv_perf)
+        c_copy.pop("video_details", None)
+        stats["conversion_stage"] = c_copy
+    if up_perf:
+        stats["upload_stage"] = up_perf
+
+    stats["resource_specs"] = {
+        "download_cpu": STAGE_CFG_DOWNLOAD["cpu"],
+        "download_ram_mb": STAGE_CFG_DOWNLOAD["memory"],
+        "encode_cpu": conv_perf.get("allocated_cpu", STAGE_CFG_ENCODE_CPU["cpu"] if not is_gpu else STAGE_CFG_ENCODE_GPU["cpu"]),
+        "encode_ram_mb": STAGE_CFG_ENCODE_CPU["memory"] if not is_gpu else STAGE_CFG_ENCODE_GPU["memory"],
+        "upload_cpu": STAGE_CFG_UPLOAD["cpu"],
+        "upload_ram_mb": STAGE_CFG_UPLOAD["memory"]
+    }
+    if conv_perf.get("resource_usage"):
+        stats["resource_usage"] = conv_perf["resource_usage"]
+
+    stats["cost_estimate"] = {
+        "total_cost_usd": total_cost_usd,
+        "formatted": f"${total_cost_usd:.4f}",
+        "breakdown_usd": {
+            "download": round(dl_cost, 6),
+            "conversion": round(enc_cost, 6),
+            "upload": round(up_cost, 6)
+        }
+    }
+    return stats
+

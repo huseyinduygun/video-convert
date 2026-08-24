@@ -4,12 +4,13 @@ import uuid
 
 import modal
 
-from ..config import app, DEFAULT_TARGET_DIR, DEFAULT_WEB_DIR
+from ..config import app, volume, DEFAULT_TARGET_DIR, DEFAULT_WEB_DIR, STAGE_CFG_API
 from ..core import image_cpu, verify_request_auth, check_storage_server_connection, build_web_base_url
 from ..stages import download_stage
 
 
-@app.function(image=image_cpu, cpu=0.125, memory=256)
+@app.function(image=image_cpu, **STAGE_CFG_API)
+@modal.concurrent(max_inputs=100)
 @modal.fastapi_endpoint(method="POST")
 def convert_request(data: dict):
     if not verify_request_auth(data):
@@ -30,6 +31,7 @@ def convert_request(data: dict):
     enable_sprite      = bool(data.get("sprite", False) or data.get("enable_sprite", False) or data.get("vtt", False))
 
     raw_gpu  = data.get("gpu")
+    requested_gpu_type = data.get("gpu_type") or (str(raw_gpu).upper() if str(raw_gpu).upper() in ["T4", "L4", "A10", "A100", "L40S", "H100"] else None)
     auto_gpu = bool(data.get("auto_gpu", False) or data.get("auto_select_gpu", False) or str(raw_gpu).lower() == "auto")
     use_gpu  = bool(raw_gpu) if not auto_gpu else False
     gpu_mode = "auto" if auto_gpu else ("gpu" if use_gpu else "cpu")
@@ -99,17 +101,19 @@ def convert_request(data: dict):
     custom_id  = custom_id or video_id
     start_time = time.time()
 
-    download_stage.spawn(
+    vol_sub = volume.with_mount_options(sub_path=f"/{video_id}")
+    download_stage.with_options(volumes={"/vol": vol_sub}).spawn(
         video_url, webhook_url, video_id, custom_id, username, server_config, start_time,
-        qualities, gpu_mode, poster_url, watermark_url, watermark_position, enable_sprite, encrypt, key_url
+        qualities, gpu_mode, poster_url, watermark_url, watermark_position, enable_sprite, encrypt, key_url,
+        requested_gpu_type
     )
 
     if auto_gpu:
         engine_name = "Akıllı Otomatik Maliyet Seçimi (Auto-GPU / CPU)"
     elif use_gpu:
-        engine_name = "NVIDIA L4 GPU (Ada Lovelace)"
+        engine_name = "NVIDIA T4 GPU (CUDA NVENC)"
     else:
-        engine_name = "CPU (8x vCPU Superfast)"
+        engine_name = "CPU (8x vCPU Superfast HQ)"
 
     expected_base_web_url = build_web_base_url(cdn_domain, web_dir, username, video_id)
 

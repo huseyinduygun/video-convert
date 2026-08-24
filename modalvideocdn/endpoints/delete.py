@@ -4,11 +4,12 @@ import subprocess
 
 import modal
 
-from ..config import app, DEFAULT_TARGET_DIR
+from ..config import app, volume, DEFAULT_TARGET_DIR, STAGE_CFG_API
 from ..core import image_cpu, verify_request_auth
 
 
-@app.function(image=image_cpu, cpu=0.125, memory=256)
+@app.function(image=image_cpu, volumes={"/vol": volume}, **STAGE_CFG_API)
+@modal.concurrent(max_inputs=100)
 @modal.fastapi_endpoint(method="POST")
 def delete_request(data: dict):
     if not verify_request_auth(data):
@@ -26,6 +27,19 @@ def delete_request(data: dict):
         return {"status": "error", "status_code": 400, "message": "video_id parametresi zorunludur!"}, 400
 
     username = re.sub(r'[^a-zA-Z0-9_-]', '', str(raw_username).strip())
+
+    # Eğer Volume üzerinde çalışan aktif bir işlem varsa iptal bayrağını tetikle
+    work_dir = f"/vol/{video_id}"
+    try:
+        volume.reload()
+        if os.path.exists(work_dir):
+            flag_path = f"{work_dir}/cancel.flag"
+            with open(flag_path, "w", encoding="utf-8") as f:
+                f.write("CANCELLED_BY_DELETE_API")
+            volume.commit()
+            print(f"[{video_id}] /delete_request sırasında aktif işlem tespit edildi. Durdurma bayrağı (/vol/{video_id}/cancel.flag) yazıldı.")
+    except Exception as vol_err:
+        print(f"[{video_id}] Volume cancel check uyarısı: {vol_err}")
 
     raw_storage_host = data.get("storage_host") or data.get("server_host") or data.get("host")
     raw_storage_user = data.get("storage_user") or data.get("server_user") or data.get("user")
