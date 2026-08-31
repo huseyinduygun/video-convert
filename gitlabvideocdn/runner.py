@@ -37,7 +37,7 @@ from .core.utils import (
 
 
 def parse_payload() -> dict:
-    """Komut satırından veya ortam değişkenlerinden dönüştürme parametrelerini ayrıştırır."""
+    """Komut satırından veya GitLab CI/CD ortam değişkenlerinden dönüştürme parametrelerini ayrıştırır."""
     parser = argparse.ArgumentParser(description="GitLab CI/CD Video HLS Converter Runner")
     parser.add_argument("--payload", type=str, help="JSON formatında istek verisi")
     parser.add_argument("--payload-b64", type=str, help="Base64 kodlanmış JSON istek verisi")
@@ -63,7 +63,7 @@ def parse_payload() -> dict:
         except Exception as e:
             print(f"[UYARI] --payload-file okuma hatası: {e}")
 
-    # Ortam değişkenlerinden yükle (CI/CD değişkenleri)
+    # Ortam değişkenlerinden PAYLOAD_JSON veya PAYLOAD_B64 yükle
     if not data:
         env_payload = os.environ.get("PAYLOAD_JSON")
         env_payload_b64 = os.environ.get("PAYLOAD_B64")
@@ -71,7 +71,11 @@ def parse_payload() -> dict:
             try:
                 data = json.loads(env_payload)
             except Exception:
-                pass
+                # Bazen tırnak işaretleri escape edilmiş olabilir
+                try:
+                    data = json.loads(env_payload.replace(r'\"', '"'))
+                except Exception:
+                    pass
         elif env_payload_b64:
             try:
                 decoded = base64.b64decode(env_payload_b64).decode("utf-8")
@@ -79,34 +83,57 @@ def parse_payload() -> dict:
             except Exception:
                 pass
 
-    if not data:
-        data = {
-            "video_url": os.environ.get("VIDEO_URL"),
-            "webhook_url": os.environ.get("WEBHOOK_URL"),
-            "cdn_domain": os.environ.get("CDN_DOMAIN"),
-            "username": os.environ.get("USERNAME"),
-            "custom_id": os.environ.get("CUSTOM_ID"),
-            "video_id": os.environ.get("VIDEO_ID"),
-            "storage_host": os.environ.get("STORAGE_HOST"),
-            "storage_user": os.environ.get("STORAGE_USER"),
-            "storage_pass": os.environ.get("STORAGE_PASS"),
-            "storage_port": int(os.environ.get("STORAGE_PORT", 22)),
-            "target_dir": os.environ.get("TARGET_DIR", DEFAULT_TARGET_DIR),
-            "web_dir": os.environ.get("WEB_DIR", DEFAULT_WEB_DIR),
-            "poster_url": os.environ.get("POSTER_URL"),
-            "watermark_url": os.environ.get("WATERMARK_URL"),
-            "watermark_position": os.environ.get("WATERMARK_POSITION", "rt"),
-            "sprite": os.environ.get("ENABLE_SPRITE", "0") in ["1", "true", "True"],
-            "encrypt": os.environ.get("ENCRYPT", "0") in ["1", "true", "True"],
-            "key_url": os.environ.get("KEY_URL"),
-            "gpu": os.environ.get("GPU", "0") in ["1", "true", "True", "auto"],
-        }
+    if not isinstance(data, dict):
+        data = {}
+
+    # Bireysel GitLab CI/CD değişkenlerini oku ve eksik alanları doldur / üzerine yaz
+    env_mappings = [
+        ("video_url", ["VIDEO_URL"]),
+        ("webhook_url", ["WEBHOOK_URL"]),
+        ("cdn_domain", ["CDN_DOMAIN", "DOMAIN", "CDN_URL"]),
+        ("username", ["USERNAME", "USER"]),
+        ("custom_id", ["CUSTOM_ID", "ID", "EXTERNAL_ID"]),
+        ("video_id", ["VIDEO_ID"]),
+        ("storage_host", ["STORAGE_HOST", "SERVER_HOST", "HOST"]),
+        ("storage_user", ["STORAGE_USER", "SERVER_USER"]),
+        ("storage_pass", ["STORAGE_PASS", "STORAGE_PASSWORD", "SERVER_PASS", "PASSWORD", "PASS"]),
+        ("storage_port", ["STORAGE_PORT", "SERVER_PORT", "PORT"]),
+        ("target_dir", ["TARGET_DIR", "STORAGE_DIR"]),
+        ("web_dir", ["WEB_DIR"]),
+        ("poster_url", ["POSTER_URL", "COVER_URL", "THUMBNAIL_URL"]),
+        ("watermark_url", ["WATERMARK_URL", "LOGO_URL"]),
+        ("watermark_position", ["WATERMARK_POSITION", "LOGO_POSITION"]),
+        ("key_url", ["KEY_URL", "KEY_API_URL", "ENCRYPTION_KEY_URL"]),
+    ]
+
+    for key, env_names in env_mappings:
+        if not data.get(key):
+            for env_name in env_names:
+                val = os.environ.get(env_name)
+                if val is not None and str(val).strip():
+                    data[key] = str(val).strip()
+                    break
+
+    # Boolean alanlar
+    if "sprite" not in data and "enable_sprite" not in data and "vtt" not in data:
+        for env_k in ["ENABLE_SPRITE", "SPRITE", "VTT"]:
+            if env_k in os.environ:
+                data["sprite"] = os.environ[env_k] in ["1", "true", "True", "TRUE", "yes"]
+                break
+
+    if "encrypt" not in data and "encryption" not in data and "enable_encryption" not in data:
+        for env_k in ["ENCRYPT", "ENCRYPTION", "ENABLE_ENCRYPTION"]:
+            if env_k in os.environ:
+                data["encrypt"] = os.environ[env_k] in ["1", "true", "True", "TRUE", "yes"]
+                break
+
+    if "qualities" not in data:
         qualities_env = os.environ.get("QUALITIES")
         if qualities_env:
             try:
-                data["qualities"] = json.loads(qualities_env) if qualities_env.startswith("[") else [q.strip() for q in qualities_env.split(",")]
+                data["qualities"] = json.loads(qualities_env) if qualities_env.startswith("[") else [q.strip() for q in qualities_env.split(",") if q.strip()]
             except Exception:
-                data["qualities"] = [q.strip() for q in qualities_env.split(",")]
+                data["qualities"] = [q.strip() for q in qualities_env.split(",") if q.strip()]
 
     return data
 
