@@ -1,0 +1,42 @@
+# =============================================================================
+# GitLab CI/CD Video HLS Processor & Converter Pipeline
+# =============================================================================
+
+stages:
+  - convert
+
+variables:
+  DEBIAN_FRONTEND: "noninteractive"
+  PYTHONUNBUFFERED: "1"
+
+video_convert_job:
+  stage: convert
+  image: ubuntu:22.04
+  timeout: 2 hours
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "trigger"'
+    - if: '$CI_PIPELINE_SOURCE == "api"'
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+    - if: '$CI_COMMIT_BRANCH == "main" && $CI_PIPELINE_SOURCE == "push"'
+      when: manual
+  before_script:
+    - apt-get update -qq
+    - apt-get install -y --no-install-recommends curl aria2 rsync sshpass openssh-client xz-utils ca-certificates python3 python3-pip python3-requests
+    - |
+      # FFmpeg 7.x Static Binary Hızlı Kurulum
+      if ! command -v ffmpeg &> /dev/null; then
+        echo "FFmpeg indiriliyor..."
+        curl -fsSL https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz -o /tmp/ffmpeg.tar.xz
+        mkdir -p /tmp/ffmpeg-static
+        tar -xf /tmp/ffmpeg.tar.xz -C /tmp/ffmpeg-static --strip-components=1
+        mv /tmp/ffmpeg-static/ffmpeg /usr/local/bin/ffmpeg
+        mv /tmp/ffmpeg-static/ffprobe /usr/local/bin/ffprobe
+        rm -rf /tmp/ffmpeg-static /tmp/ffmpeg.tar.xz
+      fi
+    - python3 -m pip install -q -r gitlabvideocdn/requirements.txt || true
+    - echo "=== GitLab CI/CD Video Converter Başlatılıyor ==="
+    - echo "Pipeline ID: $CI_PIPELINE_ID"
+    - ffmpeg -version | head -n 1
+    - aria2c --version | head -n 1
+  script:
+    - python3 -m gitlabvideocdn.runner
