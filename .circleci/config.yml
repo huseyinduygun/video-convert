@@ -67,30 +67,42 @@ jobs:
       - checkout
       - restore_cache:
           keys:
-            - static-tools-v3-{{ arch }}
-            - static-tools-v3
+            - static-all-v4-{{ arch }}
+            - static-all-v4
       - run:
           name: Setup Dependencies (FFmpeg, Aria2, SSHPass)
           command: |
             mkdir -p "$HOME/bin"
             export PATH="$HOME/bin:$PATH"
-            rm -f "$HOME/bin/aria2c" "$HOME/bin/sshpass" 2>/dev/null || true
+            
+            # 1. Statik FFmpeg & FFprobe (John Van Sickle)
             if ! which ffmpeg >/dev/null 2>&1 || ! which ffprobe >/dev/null 2>&1; then
-              echo "Statik FFmpeg indiriliyor..."
+              echo "Statik FFmpeg indiriliyor ve önbelleğe alınıyor..."
               curl -sL https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz | tar -xJ --strip-components=1 -C "$HOME/bin" --wildcards "*/ffmpeg" "*/ffprobe" 2>/dev/null || true
               chmod +x "$HOME/bin/ffmpeg" "$HOME/bin/ffprobe" 2>/dev/null || true
             fi
-            if ! which aria2c >/dev/null 2>&1 || ! which sshpass >/dev/null 2>&1 || ! aria2c --version >/dev/null 2>&1; then
-              echo "Aria2 & SSHPass sistem paketleri kuruluyor..."
+
+            # 2. Statik Aria2c (100% Bağımsız Tek Dosya)
+            if ! which aria2c >/dev/null 2>&1 || ! aria2c --version >/dev/null 2>&1; then
+              echo "Statik Aria2c indiriliyor ve önbelleğe alınıyor..."
+              curl -sL https://github.com/P3TERX/Aria2-Pro-Core/releases/download/1.37.0_2023.08.02/aria2-1.37.0-static-linux-amd64.tar.gz | tar -xz -C "$HOME/bin" 2>/dev/null || true
+              chmod +x "$HOME/bin/aria2c" 2>/dev/null || true
+            fi
+
+            # 3. SSHPass
+            if ! which sshpass >/dev/null 2>&1; then
+              echo "SSHPass kuruluyor..."
               sudo DEBIAN_FRONTEND=noninteractive apt-get update -qq
-              sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends aria2 sshpass
+              sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends sshpass
+              cp /usr/bin/sshpass "$HOME/bin/" 2>/dev/null || true
+              chmod +x "$HOME/bin/sshpass" 2>/dev/null || true
             fi
       - run:
           name: Install Python Requirements
           command: |
             python3 -m pip install -q -r circlecivideocdn/requirements.txt || true
       - save_cache:
-          key: static-tools-v3-{{ arch }}
+          key: static-all-v4-{{ arch }}
           paths:
             - ~/bin
             - ~/.cache/pip
