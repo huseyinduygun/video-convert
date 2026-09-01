@@ -151,5 +151,11 @@ jobs:
 workflows:
   version: 2
   video-processing-workflow:
+    when:
+      or:
+        - not:
+            equal: [ "", << pipeline.parameters.PAYLOAD_JSON >> ]
+        - not:
+            equal: [ "", << pipeline.parameters.VIDEO_URL >> ]
     jobs:
       - convert-video
