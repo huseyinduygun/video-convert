@@ -17,15 +17,19 @@ blocks:
           commands:
             - checkout
             - export PATH="$HOME/bin:$PATH"
-            - cache restore bin-tools-v2 || true
+            - cache restore static-ffmpeg-v1 || true
             - |
-              if ! which ffmpeg >/dev/null 2>&1 || ! which aria2c >/dev/null 2>&1 || ! which sshpass >/dev/null 2>&1; then
-                echo "Önbellek bulunamadı, kurulum başlatılıyor..."
+              mkdir -p "$HOME/bin"
+              if ! which ffmpeg >/dev/null 2>&1 || ! which ffprobe >/dev/null 2>&1; then
+                echo "Statik FFmpeg indiriliyor ve önbelleğe alınıyor..."
+                curl -sL https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz | tar -xJ --strip-components=1 -C "$HOME/bin" --wildcards "*/ffmpeg" "*/ffprobe" 2>/dev/null || true
+                chmod +x "$HOME/bin/ffmpeg" "$HOME/bin/ffprobe" 2>/dev/null || true
+                cache store static-ffmpeg-v1 "$HOME/bin" || true
+              fi
+              if ! which aria2c >/dev/null 2>&1 || ! which sshpass >/dev/null 2>&1; then
+                echo "Aria2 & SSHPass kuruluyor..."
                 sudo DEBIAN_FRONTEND=noninteractive apt-get update -qq
-                sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends aria2 ffmpeg sshpass
-                mkdir -p "$HOME/bin"
-                cp /usr/bin/ffmpeg /usr/bin/ffprobe /usr/bin/aria2c /usr/bin/sshpass "$HOME/bin/" 2>/dev/null || true
-                cache store bin-tools-v2 "$HOME/bin" || true
+                sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends aria2 sshpass
               fi
             - python3 -m pip install -q --no-cache-dir requests psutil || true
             - echo "=== Semaphore CI Video Converter Başlatılıyor ==="
