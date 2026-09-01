@@ -12,7 +12,7 @@ agent:
 blocks:
   - name: "Video Convert & Upload"
     run:
-      when: "is_present(parameters.PAYLOAD_JSON) or is_present(parameters.VIDEO_URL)"
+      when: "'${{parameters.PAYLOAD_JSON}}' != ''"
     task:
       jobs:
         - name: "HLS Converter"
