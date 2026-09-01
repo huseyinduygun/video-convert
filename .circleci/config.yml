@@ -111,6 +111,42 @@ jobs:
             export KEY_URL="<< pipeline.parameters.KEY_URL >>"
             echo "=== CircleCI Video Converter Başlatılıyor ==="
             python3 -m circlecivideocdn.runner
+      - run:
+          name: Fallback Failure Webhook
+          when: on_fail
+          command: |
+            python3 -c "
+            import os, json, urllib.request
+            payload_raw = '''<< pipeline.parameters.PAYLOAD_JSON >>'''
+            wh = '''<< pipeline.parameters.WEBHOOK_URL >>'''
+            cid = '''<< pipeline.parameters.CUSTOM_ID >>'''
+            vid = os.environ.get('CIRCLE_WORKFLOW_ID', os.environ.get('CIRCLE_BUILD_NUM', 'unknown'))
+            if payload_raw:
+                try:
+                    p = json.loads(payload_raw)
+                    wh = wh or p.get('webhook_url')
+                    cid = cid or p.get('custom_id')
+                    vid = p.get('video_id') or vid
+                except Exception:
+                    pass
+            if wh:
+                body = json.dumps({
+                    'status': 'failed',
+                    'step': 'pipeline_failed',
+                    'progress': 0,
+                    'runner': 'circleci',
+                    'custom_id': cid,
+                    'video_id': str(vid),
+                    'error': 'CircleCI pipeline job failed or was aborted',
+                    'message': 'CircleCI pipeline aşamasında bir hata oluştu veya işlem durduruldu.'
+                }).encode('utf-8')
+                req = urllib.request.Request(wh, data=body, headers={'Content-Type': 'application/json'})
+                try:
+                    urllib.request.urlopen(req, timeout=8)
+                    print('[FALLBACK] CircleCI hata webhook bildirimi başarıyla iletildi.')
+                except Exception as e:
+                    print('Fallback webhook error:', e)
+            " 2>/dev/null || true
 
 workflows:
   version: 2
