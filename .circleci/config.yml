@@ -55,14 +55,14 @@ parameters:
     default: ""
 
 executors:
-  linux-xlarge:
+  linux-large:
     machine:
       image: ubuntu-2204:current
-    resource_class: xlarge
+    resource_class: large
 
 jobs:
   convert-video:
-    executor: linux-xlarge
+    executor: linux-large
     steps:
       - checkout
       - restore_cache:
