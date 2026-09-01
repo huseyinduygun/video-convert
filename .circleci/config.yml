@@ -1,0 +1,119 @@
+# =============================================================================
+# CircleCI Video HLS Processor & Converter Pipeline
+# =============================================================================
+
+version: 2.1
+
+parameters:
+  PAYLOAD_JSON:
+    type: string
+    default: ""
+  VIDEO_URL:
+    type: string
+    default: ""
+  WEBHOOK_URL:
+    type: string
+    default: ""
+  CDN_DOMAIN:
+    type: string
+    default: ""
+  USERNAME:
+    type: string
+    default: ""
+  CUSTOM_ID:
+    type: string
+    default: ""
+  QUALITIES:
+    type: string
+    default: ""
+  STORAGE_HOST:
+    type: string
+    default: ""
+  STORAGE_USER:
+    type: string
+    default: ""
+  STORAGE_PASS:
+    type: string
+    default: ""
+  STORAGE_PORT:
+    type: string
+    default: "22"
+  TARGET_DIR:
+    type: string
+    default: "hls"
+  WEB_DIR:
+    type: string
+    default: ""
+  ENABLE_SPRITE:
+    type: string
+    default: "0"
+  ENCRYPT:
+    type: string
+    default: "0"
+  KEY_URL:
+    type: string
+    default: ""
+
+executors:
+  linux-medium:
+    machine:
+      image: ubuntu-2204:current
+    resource_class: medium
+
+jobs:
+  convert-video:
+    executor: linux-medium
+    steps:
+      - checkout
+      - restore_cache:
+          keys:
+            - static-tools-v1-{{ arch }}
+            - static-tools-v1
+      - run:
+          name: Setup Dependencies (FFmpeg, Aria2, SSHPass)
+          command: |
+            mkdir -p "$HOME/bin"
+            export PATH="$HOME/bin:$PATH"
+            if ! which ffmpeg >/dev/null 2>&1 || ! which ffprobe >/dev/null 2>&1 || ! which aria2c >/dev/null 2>&1 || ! which sshpass >/dev/null 2>&1; then
+              echo "Statik araçlar kuruluyor ve önbelleğe alınıyor..."
+              curl -sL https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz | tar -xJ --strip-components=1 -C "$HOME/bin" --wildcards "*/ffmpeg" "*/ffprobe" 2>/dev/null || true
+              sudo DEBIAN_FRONTEND=noninteractive apt-get update -qq
+              sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends aria2 sshpass
+              cp /usr/bin/aria2c /usr/bin/sshpass "$HOME/bin/" 2>/dev/null || true
+              chmod +x "$HOME/bin/"* 2>/dev/null || true
+            fi
+      - save_cache:
+          key: static-tools-v1-{{ arch }}
+          paths:
+            - ~/bin
+      - run:
+          name: Install Python Requirements
+          command: python3 -m pip install -q --no-cache-dir requests psutil || true
+      - run:
+          name: Execute Video HLS Converter
+          command: |
+            export PATH="$HOME/bin:$PATH"
+            export PAYLOAD_JSON="<< pipeline.parameters.PAYLOAD_JSON >>"
+            export VIDEO_URL="<< pipeline.parameters.VIDEO_URL >>"
+            export WEBHOOK_URL="<< pipeline.parameters.WEBHOOK_URL >>"
+            export CDN_DOMAIN="<< pipeline.parameters.CDN_DOMAIN >>"
+            export USERNAME="<< pipeline.parameters.USERNAME >>"
+            export CUSTOM_ID="<< pipeline.parameters.CUSTOM_ID >>"
+            export QUALITIES="<< pipeline.parameters.QUALITIES >>"
+            export STORAGE_HOST="<< pipeline.parameters.STORAGE_HOST >>"
+            export STORAGE_USER="<< pipeline.parameters.STORAGE_USER >>"
+            export STORAGE_PASS="<< pipeline.parameters.STORAGE_PASS >>"
+            export STORAGE_PORT="<< pipeline.parameters.STORAGE_PORT >>"
+            export TARGET_DIR="<< pipeline.parameters.TARGET_DIR >>"
+            export WEB_DIR="<< pipeline.parameters.WEB_DIR >>"
+            export ENABLE_SPRITE="<< pipeline.parameters.ENABLE_SPRITE >>"
+            export ENCRYPT="<< pipeline.parameters.ENCRYPT >>"
+            export KEY_URL="<< pipeline.parameters.KEY_URL >>"
+            echo "=== CircleCI Video Converter Başlatılıyor ==="
+            python3 -m circlecivideocdn.runner
+
+workflows:
+  version: 2
+  video-processing-workflow:
+    jobs:
+      - convert-video
