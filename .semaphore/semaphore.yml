@@ -34,3 +34,39 @@ blocks:
             - python3 -m pip install -q --no-cache-dir requests psutil || true
             - echo "=== Semaphore CI Video Converter Başlatılıyor ==="
             - python3 -m semaphorevideocdn.runner
+      epilogue:
+        on_fail:
+          commands:
+            - |
+              python3 -c "
+              import os, json, urllib.request
+              payload_raw = os.environ.get('PAYLOAD_JSON', '')
+              wh = os.environ.get('WEBHOOK_URL', '')
+              cid = os.environ.get('CUSTOM_ID', '')
+              vid = os.environ.get('VIDEO_ID', '')
+              if payload_raw:
+                  try:
+                      p = json.loads(payload_raw)
+                      wh = wh or p.get('webhook_url')
+                      cid = cid or p.get('custom_id')
+                      vid = vid or p.get('video_id')
+                  except Exception:
+                      pass
+              if wh:
+                  body = json.dumps({
+                      'status': 'failed',
+                      'step': 'pipeline_failed',
+                      'progress': 0,
+                      'runner': 'semaphore-ci',
+                      'custom_id': cid,
+                      'video_id': vid or os.environ.get('SEMAPHORE_WORKFLOW_ID', 'unknown'),
+                      'error': 'Pipeline execution failed (CI job aborted or crashed)',
+                      'message': 'Semaphore CI pipeline aşamasında bir hata oluştu ve işlem tamamlanamadı.'
+                  }).encode('utf-8')
+                  req = urllib.request.Request(wh, data=body, headers={'Content-Type': 'application/json'})
+                  try:
+                      urllib.request.urlopen(req, timeout=8)
+                      print('[FALLBACK] Pipeline hata webhook bildirimi başarıyla iletildi.')
+                  except Exception as e:
+                      print('Fallback webhook error:', e)
+              " 2>/dev/null || true
