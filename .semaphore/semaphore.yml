@@ -16,7 +16,17 @@ blocks:
         - name: "HLS Converter"
           commands:
             - checkout
-            - which aria2c >/dev/null 2>&1 && which ffmpeg >/dev/null 2>&1 && which sshpass >/dev/null 2>&1 || (sudo DEBIAN_FRONTEND=noninteractive apt-get update -qq && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends aria2 ffmpeg sshpass)
+            - export PATH="$HOME/bin:$PATH"
+            - cache restore bin-tools-v2 || true
+            - |
+              if ! which ffmpeg >/dev/null 2>&1 || ! which aria2c >/dev/null 2>&1 || ! which sshpass >/dev/null 2>&1; then
+                echo "Önbellek bulunamadı, kurulum başlatılıyor..."
+                sudo DEBIAN_FRONTEND=noninteractive apt-get update -qq
+                sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends aria2 ffmpeg sshpass
+                mkdir -p "$HOME/bin"
+                cp /usr/bin/ffmpeg /usr/bin/ffprobe /usr/bin/aria2c /usr/bin/sshpass "$HOME/bin/" 2>/dev/null || true
+                cache store bin-tools-v2 "$HOME/bin" || true
+              fi
             - python3 -m pip install -q --no-cache-dir requests psutil || true
             - echo "=== Semaphore CI Video Converter Başlatılıyor ==="
             - python3 -m semaphorevideocdn.runner
