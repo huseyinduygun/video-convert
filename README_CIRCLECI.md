@@ -18,15 +18,24 @@
 
 ---
 
-## 🔑 CircleCI Kurulumu & API Token Alma
+## 🔑 CircleCI API Token & Doğru `project-slug` Bilgisi
 
-1. [CircleCI Dashboard](https://app.circleci.com/) hesabınıza giriş yapın.
-2. Sol alttaki profil simgenizden **User Settings -> Personal API Tokens** sayfasına gidin.
-3. Yeni bir **Personal API Token** oluşturun (Örn: `CCIPAT_xxxx` veya 40 karakterlik token).
-4. **Project Slug** bilginizi belirleyin:
-   - GitLab projeleri için: `gl/huseyinduygun/video-convert` (veya `gitlab/kullanici/repo`)
-   - GitHub projeleri için: `gh/kullanici/repo` (veya `github/kullanici/repo`)
-   - Veya doğrudan CircleCI **Project ID (UUID)** değeri.
+CircleCI API v2 uç noktalarında projenizi belirtmek için `{project-slug}` kullanılır:
+`POST https://circleci.com/api/v2/project/{project-slug}/pipeline`
+
+> [!IMPORTANT]
+> **404 "Project not found" Hatasını Önlemek İçin:**  
+> CircleCI API v2'de `project-slug` projenizin VCS türüne göre 2 farklı formatta olabilir:
+> 1. **GitLab veya GitHub App Projeleri İçin (En Yaygın):**  
+>    Format: `circleci/{organization_id}/{project_id}`  
+>    *(Örnek: `circleci/a1b2c3d4-e5f6-7890-abcd-ef1234567890/f1e2d3c4-b5a6-0987-dcba-fe0987654321`)*  
+>    *Organization ID: CircleCI sol menü -> **Organization Settings -> Overview** bölümünde yazar.*  
+>    *Project ID: CircleCI sol menü -> **Project Settings -> Overview** bölümünde **Project ID** veya **Project Slug** olarak yazar.*
+> 2. **Klasik GitHub (OAuth) Projeleri İçin:**  
+>    Format: `gh/{github_username}/{repo_name}`  
+>    *(Örnek: `gh/huseyinduygun/video-convert`)*
+> 
+> 👉 **En Kolay Yol:** CircleCI panelinde projenizi açıp **Project Settings -> Overview** sayfasına gidin. Sayfanın en üstünde yazan **Project Slug** değerini kopyalayın.
 
 ---
 
@@ -44,8 +53,9 @@ Zorunlu HTTP Başlıkları:
 ### 1. cURL ile Pipeline Başlatma (JSON Payload - Tavsiye Edilen)
 
 ```bash
+# GitLab / GitHub App Projeleri İçin:
 curl -X POST \
-  -H "Circle-Token: CIRCLECI_API_TOKEN_BURAYA" \
+  -H "Circle-Token: CCIPAT_TOKEN_BURAYA" \
   -H "Content-Type: application/json" \
   -d '{
     "branch": "main",
@@ -53,7 +63,21 @@ curl -X POST \
       "PAYLOAD_JSON": "{\"video_url\":\"https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/720/Big_Buck_Bunny_720_10s_30MB.mp4\",\"webhook_url\":\"https://silly-island-20.webhook.cool\",\"cdn_domain\":\"https://video-cdn.xfoy.dev\",\"username\":\"huseyin\",\"custom_id\":\"POST_1001\",\"qualities\":[\"360p\",\"720p\"],\"sprite\":true,\"encrypt\":false,\"storage_host\":\"u625088.your-storagebox.de\",\"storage_user\":\"u625088-sub1\",\"storage_pass\":\"videoCdn500!\",\"storage_port\":23,\"target_dir\":\"hls\"}"
     }
   }' \
-  "https://circleci.com/api/v2/project/gl/huseyinduygun/video-convert/pipeline"
+  "https://circleci.com/api/v2/project/circleci/ORG_ID/PROJECT_ID/pipeline"
+```
+
+```bash
+# Standart GitHub (OAuth) Projeleri İçin:
+curl -X POST \
+  -H "Circle-Token: CCIPAT_TOKEN_BURAYA" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "branch": "main",
+    "parameters": {
+      "PAYLOAD_JSON": "{\"video_url\":\"https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/720/Big_Buck_Bunny_720_10s_30MB.mp4\",\"webhook_url\":\"https://silly-island-20.webhook.cool\",\"cdn_domain\":\"https://video-cdn.xfoy.dev\",\"username\":\"huseyin\",\"custom_id\":\"POST_1001\",\"qualities\":[\"360p\",\"720p\"],\"sprite\":true,\"encrypt\":false,\"storage_host\":\"u625088.your-storagebox.de\",\"storage_user\":\"u625088-sub1\",\"storage_pass\":\"videoCdn500!\",\"storage_port\":23,\"target_dir\":\"hls\"}"
+    }
+  }' \
+  "https://circleci.com/api/v2/project/gh/huseyinduygun/video-convert/pipeline"
 ```
 
 **Başarılı Yanıt (HTTP 201 Created):**
