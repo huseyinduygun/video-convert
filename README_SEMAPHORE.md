@@ -1,12 +1,12 @@
 # 🎬 Semaphore CI Video HLS Converter & Processor
 
-**Semaphore CI Video Converter**, [Semaphore CI](https://semaphoreci.com/) bulut / VM altyapısı üzerinde çalışan, dinamik CDN alan adlarını, çok kullanıcılı (multi-tenant) klasör yapısını, Hetzner Storage Box ve SSH depolama sunucularını, HLS AES-128 şifrelemeyi, Timeline Sprite/WebVTT seekbar önizleme haritasını, 16 kanallı `aria2c` indirmesini ve **3 seviyeli performans/metrik loglama sistemini** destekleyen yüksek performanslı, harici bir web servisine ihtiyaç duymayan video dönüştürme ve CDN dağıtım çözümüdür.
+**Semaphore CI Video Converter**, [Semaphore CI Official API (v1alpha)](https://docs.semaphore.io/reference/api) altyapısı üzerinde çalışan, dinamik CDN alan adlarını, çok kullanıcılı (multi-tenant) klasör yapısını, Hetzner Storage Box ve SSH depolama sunucularını, HLS AES-128 şifrelemeyi, Timeline Sprite/WebVTT seekbar önizleme haritasını, 16 kanallı `aria2c` indirmesini ve **3 seviyeli performans/metrik loglama sistemini** destekleyen yüksek performanslı, harici bir web servisine ihtiyaç duymayan video dönüştürme ve CDN dağıtım çözümüdür.
 
 ---
 
 ## 🌟 Öne Çıkan Özellikler
 
-* **⚡ Ultra Hızlı Başlatma & Sıfır Ek Sunucu:** Semaphore CI'ın optimize VM makineleri (`e1-standard-2`, `e1-standard-4` vb.) üzerinde doğrudan Semaphore API ile tetiklenir.
+* **⚡ Sıfır Ek Sunucu & Resmi Semaphore API:** Harici bir API sunucusuna gerek kalmadan doğrudan Semaphore CI Workflow API (`v1alpha`) üzerinden tetiklenir.
 * **🚀 16x Paralel aria2c İndirme & Direct-IP Baypas:** Cloudflare ve TLS yükünü baypas ederek doğrudan iç ağ IP'sinden indirme (`INTERNAL_DOMAIN_IP_MAP`).
 * **🎬 Çoklu Çözünürlük HLS (Adaptive Bitrate Streaming):** `360p`, `720p`, `1080p`, `1440p`, `2160p`, `4320p` uyarlanabilir akış ve otomatik `master.m3u8` üretimi.
 * **⚡ AAC Ses Passthrough (Direct Copy):** Kaynak videodaki ses zaten `AAC` formatındaysa ses yeniden kodlanmaz, doğrudan kopyalanır (`-c:a copy`).
@@ -20,21 +20,28 @@
 
 ## 🔑 Semaphore CI Kurulumu & API Token Alma
 
+Resmi API belgeleri: [https://docs.semaphore.io/reference/api](https://docs.semaphore.io/reference/api)
+
 1. [Semaphore CI](https://semaphoreci.com/) hesabınıza giriş yapın.
-2. Sağ üstteki profil menüsünden **Account Settings -> API Tokens** bölümüne gidin.
-3. Yeni bir API Token oluşturun (Örn: `sem_tok_xxxx`).
-4. Projenizin adını veya Project ID'sini alın (Örn: `video-convert` veya UUID).
+2. [Account Settings -> API Tokens](https://me.semaphoreci.com/account) bölümünden bir API Token oluşturun (Örn: `sem_tok_xxxx`).
+3. Organizasyon URL adınızı (`<organization-url>`) ve Proje ID'nizi / Proje Adınızı alın (Örn: `video-convert`).
 
 ---
 
-## 🚀 Entegrasyon & Tetikleme Örnekleri
+## 🚀 Semaphore CI Resmi API v1alpha ile Tetikleme
 
-Semaphore CI Workflow API adresi:
-`POST https://<ORGANIZATION>.semaphoreci.com/api/v1alpha/plumber-workflows`
+Semaphore API Kök Adresi:  
+`https://<organization-url>.semaphoreci.com/api/v1alpha`
+
+Zorunlu HTTP Başlıkları:
+- `Authorization: Token {api_token}`
+- `Content-Type: application/json`
 
 ---
 
-### 1. cURL ile Tetikleme (JSON Payload - Tavsiye Edilen)
+### 1. cURL ile Workflow Başlatma (JSON Payload - Tavsiye Edilen)
+
+Endpoint: `POST https://<organization-url>.semaphoreci.com/api/v1alpha/plumber-workflows`
 
 ```bash
 curl -X POST \
@@ -42,22 +49,58 @@ curl -X POST \
   -H "Content-Type: application/json" \
   -d '{
     "project_id": "video-convert",
-    "reference": "main",
+    "reference": "refs/heads/main",
     "commit_sha": "HEAD",
     "pipeline_file": ".semaphore/semaphore.yml",
-    "env_vars": [
-      {
-        "name": "PAYLOAD_JSON",
-        "value": "{\"video_url\":\"https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/720/Big_Buck_Bunny_720_10s_30MB.mp4\",\"webhook_url\":\"https://siteniz.com/api/video_webhook\",\"cdn_domain\":\"https://video-cdn.xfoy.dev\",\"username\":\"huseyin\",\"custom_id\":\"POST_1001\",\"qualities\":[\"360p\",\"720p\"],\"sprite\":true,\"encrypt\":false,\"storage_host\":\"u625088.your-storagebox.de\",\"storage_user\":\"u625088-sub1\",\"storage_pass\":\"videoCdn500!\",\"storage_port\":23,\"target_dir\":\"hls\"}"
-      }
-    ]
+    "parameters": {
+      "PAYLOAD_JSON": "{\"video_url\":\"https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/720/Big_Buck_Bunny_720_10s_30MB.mp4\",\"webhook_url\":\"https://silly-island-20.webhook.cool\",\"cdn_domain\":\"https://video-cdn.xfoy.dev\",\"username\":\"huseyin\",\"custom_id\":\"POST_1001\",\"qualities\":[\"360p\",\"720p\"],\"sprite\":true,\"encrypt\":false,\"storage_host\":\"u625088.your-storagebox.de\",\"storage_user\":\"u625088-sub1\",\"storage_pass\":\"videoCdn500!\",\"storage_port\":23,\"target_dir\":\"hls\"}"
+    }
+  }' \
+  "https://ORGANIZATION.semaphoreci.com/api/v1alpha/plumber-workflows"
+```
+
+**Başarılı Yanıt (HTTP 200):**
+```json
+{
+  "workflow_id": "32a689e0-9082-4c5b-a648-bb3dc645452d",
+  "pipeline_id": "2abeb1a9-eb4a-4834-84b8-cb7806aec063"
+}
+```
+
+---
+
+### 2. cURL ile Ayrı Değişkenler (Parameters) Gönderimi
+
+```bash
+curl -X POST \
+  -H "Authorization: Token SEMAPHORE_API_TOKEN_BURAYA" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "project_id": "video-convert",
+    "reference": "refs/heads/main",
+    "commit_sha": "HEAD",
+    "pipeline_file": ".semaphore/semaphore.yml",
+    "parameters": {
+      "VIDEO_URL": "https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/720/Big_Buck_Bunny_720_10s_30MB.mp4",
+      "WEBHOOK_URL": "https://silly-island-20.webhook.cool",
+      "CDN_DOMAIN": "https://video-cdn.xfoy.dev",
+      "USERNAME": "huseyin",
+      "CUSTOM_ID": "POST_1001",
+      "QUALITIES": "360p,720p",
+      "STORAGE_HOST": "u625088.your-storagebox.de",
+      "STORAGE_USER": "u625088-sub1",
+      "STORAGE_PASS": "videoCdn500!",
+      "STORAGE_PORT": "23",
+      "ENABLE_SPRITE": "1",
+      "TARGET_DIR": "hls"
+    }
   }' \
   "https://ORGANIZATION.semaphoreci.com/api/v1alpha/plumber-workflows"
 ```
 
 ---
 
-### 2. Python ile Entegrasyon
+### 3. Python ile Entegrasyon
 
 ```python
 import json
@@ -69,7 +112,7 @@ PROJECT_ID = "video-convert"  # Proje adı veya UUID
 
 payload = {
     "video_url": "https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/720/Big_Buck_Bunny_720_10s_30MB.mp4",
-    "webhook_url": "https://siteniz.com/api/video_webhook",
+    "webhook_url": "https://silly-island-20.webhook.cool",
     "cdn_domain": "https://video-cdn.xfoy.dev",
     "username": "huseyin",
     "custom_id": "POST_1001",
@@ -91,26 +134,24 @@ resp = requests.post(
     },
     json={
         "project_id": PROJECT_ID,
-        "reference": "main",
+        "reference": "refs/heads/main",
         "commit_sha": "HEAD",
         "pipeline_file": ".semaphore/semaphore.yml",
-        "env_vars": [
-            {
-                "name": "PAYLOAD_JSON",
-                "value": json.dumps(payload)
-            }
-        ]
+        "parameters": {
+            "PAYLOAD_JSON": json.dumps(payload)
+        }
     },
     timeout=10
 )
 
 data = resp.json()
-print("Workflow ID:", data.get("wf_id"))
+print("Workflow ID:", data.get("workflow_id"))
+print("Pipeline ID:", data.get("pipeline_id"))
 ```
 
 ---
 
-### 3. PHP ile Entegrasyon
+### 4. PHP ile Entegrasyon
 
 ```php
 <?php
@@ -120,7 +161,7 @@ $projectId = "video-convert";
 
 $payload = [
     "video_url"     => "https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/720/Big_Buck_Bunny_720_10s_30MB.mp4",
-    "webhook_url"   => "https://siteniz.com/api/video_webhook",
+    "webhook_url"   => "https://silly-island-20.webhook.cool",
     "cdn_domain"    => "https://video-cdn.xfoy.dev",
     "username"      => "huseyin",
     "custom_id"     => "POST_1001",
@@ -136,14 +177,11 @@ $payload = [
 
 $requestData = [
     "project_id"    => $projectId,
-    "reference"     => "main",
+    "reference"     => "refs/heads/main",
     "commit_sha"    => "HEAD",
     "pipeline_file" => ".semaphore/semaphore.yml",
-    "env_vars"      => [
-        [
-            "name"  => "PAYLOAD_JSON",
-            "value" => json_encode($payload)
-        ]
+    "parameters"    => [
+        "PAYLOAD_JSON" => json_encode($payload)
     ]
 ];
 
@@ -161,13 +199,14 @@ $response = curl_exec($ch);
 curl_close($ch);
 
 $result = json_decode($response, true);
-echo "Workflow ID: " . $result["wf_id"] . "\n";
+echo "Workflow ID: " . $result["workflow_id"] . "\n";
+echo "Pipeline ID: " . $result["pipeline_id"] . "\n";
 ?>
 ```
 
 ---
 
-### 4. Node.js / JavaScript ile Entegrasyon
+### 5. Node.js / JavaScript ile Entegrasyon
 
 ```javascript
 const axios = require('axios');
@@ -178,7 +217,7 @@ const PROJECT_ID = "video-convert";
 
 const payload = {
   video_url: "https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/720/Big_Buck_Bunny_720_10s_30MB.mp4",
-  webhook_url: "https://siteniz.com/api/video_webhook",
+  webhook_url: "https://silly-island-20.webhook.cool",
   cdn_domain: "https://video-cdn.xfoy.dev",
   username: "huseyin",
   custom_id: "POST_1001",
@@ -194,23 +233,49 @@ const payload = {
 
 axios.post(`https://${SEMAPHORE_ORG}.semaphoreci.com/api/v1alpha/plumber-workflows`, {
   project_id: PROJECT_ID,
-  reference: "main",
+  reference: "refs/heads/main",
   commit_sha: "HEAD",
   pipeline_file: ".semaphore/semaphore.yml",
-  env_vars: [
-    {
-      name: "PAYLOAD_JSON",
-      value: JSON.stringify(payload)
-    }
-  ]
+  parameters: {
+    PAYLOAD_JSON: JSON.stringify(payload)
+  }
 }, {
   headers: {
     "Authorization": `Token ${SEMAPHORE_TOKEN}`,
     "Content-Type": "application/json"
   }
 })
-.then(res => console.log("Workflow ID:", res.data.wf_id))
+.then(res => {
+  console.log("Workflow ID:", res.data.workflow_id);
+  console.log("Pipeline ID:", res.data.pipeline_id);
+})
 .catch(err => console.error("Hata:", err.response?.data || err.message));
+```
+
+---
+
+## 🛑 İşlem Durdurma ve Durum Sorgulama API'leri
+
+### 1. Devam Eden Workflow'u Durdurma (Terminate)
+```bash
+curl -X POST \
+  -H "Authorization: Token {api_token}" \
+  "https://<organization-url>.semaphoreci.com/api/v1alpha/plumber-workflows/{workflow_id}/terminate"
+```
+
+### 2. Pipeline Durumunu Sorgulama (Describe Pipeline)
+```bash
+curl -H "Authorization: Token {api_token}" \
+  "https://<organization-url>.semaphoreci.com/api/v1alpha/pipelines/{pipeline_id}"
+```
+
+### 3. Pipeline'ı Durdurma (Stop Pipeline)
+```bash
+curl -X PATCH \
+  -H "Authorization: Token {api_token}" \
+  -H "Content-Type: application/json" \
+  -d '{"terminate_request": true}' \
+  "https://<organization-url>.semaphoreci.com/api/v1alpha/pipelines/{pipeline_id}"
 ```
 
 ---
@@ -251,7 +316,7 @@ Sistem işlem boyunca aşağıdaki adımlarda `webhook_url` adresinize HTTP POST
   "status": "completed",
   "step": "completed",
   "progress": 100,
-  "video_id": "sem_a1b2c3d4",
+  "video_id": "sem_32a689e0",
   "custom_id": "POST_1001",
   "username": "huseyin",
   "cdn_domain": "https://video-cdn.xfoy.dev",
@@ -260,11 +325,11 @@ Sistem işlem boyunca aşağıdaki adımlarda `webhook_url` adresinize HTTP POST
   "duration_seconds": 10.0,
   "duration": 10.0,
   "duration_formatted": "00:00:10",
-  "master_url": "https://video-cdn.xfoy.dev/huseyin/sem_a1b2c3d4/master.m3u8",
-  "poster_url": "https://video-cdn.xfoy.dev/huseyin/sem_a1b2c3d4/poster.jpg",
-  "sprite_url": "https://video-cdn.xfoy.dev/huseyin/sem_a1b2c3d4/sprite.jpg",
-  "vtt_url": "https://video-cdn.xfoy.dev/huseyin/sem_a1b2c3d4/thumbnails.vtt",
-  "info_json_url": "https://video-cdn.xfoy.dev/huseyin/sem_a1b2c3d4/info.json",
+  "master_url": "https://video-cdn.xfoy.dev/huseyin/sem_32a689e0/master.m3u8",
+  "poster_url": "https://video-cdn.xfoy.dev/huseyin/sem_32a689e0/poster.jpg",
+  "sprite_url": "https://video-cdn.xfoy.dev/huseyin/sem_32a689e0/sprite.jpg",
+  "vtt_url": "https://video-cdn.xfoy.dev/huseyin/sem_32a689e0/thumbnails.vtt",
+  "info_json_url": "https://video-cdn.xfoy.dev/huseyin/sem_32a689e0/info.json",
   "qualities": ["360p", "720p"],
   "elapsed_time_seconds": 18.5,
   "processing_time": "18.5s",
@@ -310,7 +375,7 @@ Sistem işlem boyunca aşağıdaki adımlarda `webhook_url` adresinize HTTP POST
   "status": "cancelled",
   "step": "cancelled",
   "progress": 0,
-  "video_id": "sem_a1b2c3d4",
+  "video_id": "sem_32a689e0",
   "custom_id": "POST_1001",
   "runner": "semaphore-ci",
   "message": "İşlem Semaphore CI üzerinden iptal edildi.",
@@ -325,7 +390,7 @@ Sistem işlem boyunca aşağıdaki adımlarda `webhook_url` adresinize HTTP POST
 ```
 .
 ├── .semaphore/
-│   └── semaphore.yml              # Semaphore CI Pipeline tanımı
+│   └── semaphore.yml              # Semaphore CI 2.0 Pipeline tanımı
 ├── .gitlab-ci.yml                 # GitLab CI Pipeline tanımı
 ├── modalvideocdn/                 # Modal.com serverless converter modülü
 ├── gitlabvideocdn/                # GitLab CI video converter modülü
