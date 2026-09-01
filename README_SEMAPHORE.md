@@ -18,13 +18,25 @@
 
 ---
 
-## 🔑 Semaphore CI Kurulumu & API Token Alma
+## 🔑 Semaphore CI Kurulumu & Project UUID Alma
 
 Resmi API belgeleri: [https://docs.semaphore.io/reference/api](https://docs.semaphore.io/reference/api)
 
+> [!IMPORTANT]
+> **Kritik Kural: `project_id` Alanı Project UUID Olmalıdır!**  
+> Semaphore CI `POST /api/v1alpha/plumber-workflows` uç noktası proje ismi (`video-convert`) yerine projenin **Project UUID** değerini (Örn: `895e9d6d-7fd2-48e4-8623-558295f7cdca`) bekler.
+> 
+> **Project UUID Değerini Nasıl Bulabilirsiniz?**
+> 1. Semaphore web arayüzünde projenizin **Project Settings** sayfasına giderek URL'deki veya sayfadaki UUID'yi alabilirsiniz.
+> 2. Veya API ile tüm projelerinizi listeleyip proje adınızın (`video-convert`) UUID'sini sorgulayabilirsiniz:
+>    ```bash
+>    curl -H "Authorization: Token {api_token}" \
+>      "https://<organization-url>.semaphoreci.com/api/v1alpha/projects"
+>    ```
+
 1. [Semaphore CI](https://semaphoreci.com/) hesabınıza giriş yapın.
 2. [Account Settings -> API Tokens](https://me.semaphoreci.com/account) bölümünden bir API Token oluşturun (Örn: `sem_tok_xxxx`).
-3. Organizasyon URL adınızı (`<organization-url>`) ve Proje ID'nizi / Proje Adınızı alın (Örn: `video-convert`).
+3. Organizasyon URL adınızı (`<organization-url>`) ve **Project UUID** bilginizi (Örn: `895e9d6d-7fd2-48e4-8623-558295f7cdca`) not edin.
 
 ---
 
@@ -48,7 +60,7 @@ curl -X POST \
   -H "Authorization: Token SEMAPHORE_API_TOKEN_BURAYA" \
   -H "Content-Type: application/json" \
   -d '{
-    "project_id": "video-convert",
+    "project_id": "895e9d6d-7fd2-48e4-8623-558295f7cdca",
     "reference": "refs/heads/main",
     "commit_sha": "HEAD",
     "pipeline_file": ".semaphore/semaphore.yml",
@@ -76,7 +88,7 @@ curl -X POST \
   -H "Authorization: Token SEMAPHORE_API_TOKEN_BURAYA" \
   -H "Content-Type: application/json" \
   -d '{
-    "project_id": "video-convert",
+    "project_id": "895e9d6d-7fd2-48e4-8623-558295f7cdca",
     "reference": "refs/heads/main",
     "commit_sha": "HEAD",
     "pipeline_file": ".semaphore/semaphore.yml",
@@ -100,15 +112,118 @@ curl -X POST \
 
 ---
 
-### 3. Python ile Entegrasyon
+### 3. PHP ile Entegrasyon (Otomatik Project UUID Çözümleme ile)
+
+```php
+<?php
+$semaphoreOrg = "your-org";
+$apiToken = "sem_tok_xxxx";
+// Doğrudan UUID veya Proje İsmi girebilirsiniz:
+$projectInput = "895e9d6d-7fd2-48e4-8623-558295f7cdca"; // veya "video-convert"
+
+// Otomatik UUID Çözümleme: Eğer girilen değer UUID değilse API'den ID bulunur
+function resolveSemaphoreProjectId($org, $token, $projectInput) {
+    // UUID regex formatı kontrolü
+    if (preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i', $projectInput)) {
+        return $projectInput;
+    }
+    // İsim verilmişse API üzerinden ID'yi bul
+    $ch = curl_init("https://{$org}.semaphoreci.com/api/v1alpha/projects");
+    curl_setopt($ch, CURLOPT_HTTPHEADER, ["Authorization: Token {$token}"]);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    $resp = curl_exec($ch);
+    curl_close($ch);
+    $projects = json_decode($resp, true);
+    if (is_array($projects)) {
+        foreach ($projects as $p) {
+            $name = $p['metadata']['name'] ?? ($p['name'] ?? '');
+            $id = $p['metadata']['id'] ?? ($p['id'] ?? '');
+            if (strcasecmp($name, $projectInput) === 0 && $id) {
+                return $id;
+            }
+        }
+    }
+    return $projectInput;
+}
+
+$resolvedProjectId = resolveSemaphoreProjectId($semaphoreOrg, $apiToken, $projectInput);
+
+$payload = [
+    "video_url"     => "https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/720/Big_Buck_Bunny_720_10s_30MB.mp4",
+    "webhook_url"   => "https://silly-island-20.webhook.cool",
+    "cdn_domain"    => "https://video-cdn.xfoy.dev",
+    "username"      => "huseyin",
+    "custom_id"     => "POST_1001",
+    "qualities"     => ["360p", "720p"],
+    "sprite"        => true,
+    "encrypt"       => false,
+    "storage_host"  => "u625088.your-storagebox.de",
+    "storage_user"  => "u625088-sub1",
+    "storage_pass"  => "videoCdn500!",
+    "storage_port"  => 23,
+    "target_dir"    => "hls"
+];
+
+$requestData = [
+    "project_id"    => $resolvedProjectId,
+    "reference"     => "refs/heads/main",
+    "commit_sha"    => "HEAD",
+    "pipeline_file" => ".semaphore/semaphore.yml",
+    "parameters"    => [
+        "PAYLOAD_JSON" => json_encode($payload)
+    ]
+];
+
+$ch = curl_init("https://{$semaphoreOrg}.semaphoreci.com/api/v1alpha/plumber-workflows");
+curl_setopt($ch, CURLOPT_POST, true);
+curl_setopt($ch, CURLOPT_HTTPHEADER, [
+    "Authorization: Token {$apiToken}",
+    "Content-Type: application/json"
+]);
+curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($requestData));
+curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+
+$response = curl_exec($ch);
+curl_close($ch);
+
+$result = json_decode($response, true);
+echo "Workflow ID: " . ($result["workflow_id"] ?? "Bilinmiyor") . "\n";
+echo "Pipeline ID: " . ($result["pipeline_id"] ?? "Bilinmiyor") . "\n";
+?>
+```
+
+---
+
+### 4. Python ile Entegrasyon (Otomatik UUID Çözümleme ile)
 
 ```python
 import json
+import re
 import requests
 
 SEMAPHORE_ORG = "your-org"
 SEMAPHORE_TOKEN = "sem_tok_xxxx"
-PROJECT_ID = "video-convert"  # Proje adı veya UUID
+PROJECT_INPUT = "895e9d6d-7fd2-48e4-8623-558295f7cdca"  # veya "video-convert"
+
+def resolve_project_id(org, token, proj_input):
+    if re.match(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', proj_input, re.I):
+        return proj_input
+    # İsim verilmişse API'den UUID'yi bul
+    res = requests.get(
+        f"https://{org}.semaphoreci.com/api/v1alpha/projects",
+        headers={"Authorization": f"Token {token}"},
+        timeout=5
+    )
+    if res.status_code == 200:
+        for p in res.json():
+            name = p.get("metadata", {}).get("name") or p.get("name")
+            pid = p.get("metadata", {}).get("id") or p.get("id")
+            if name and name.lower() == proj_input.lower() and pid:
+                return pid
+    return proj_input
+
+project_uuid = resolve_project_id(SEMAPHORE_ORG, SEMAPHORE_TOKEN, PROJECT_INPUT)
 
 payload = {
     "video_url": "https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/720/Big_Buck_Bunny_720_10s_30MB.mp4",
@@ -133,7 +248,7 @@ resp = requests.post(
         "Content-Type": "application/json"
     },
     json={
-        "project_id": PROJECT_ID,
+        "project_id": project_uuid,
         "reference": "refs/heads/main",
         "commit_sha": "HEAD",
         "pipeline_file": ".semaphore/semaphore.yml",
@@ -151,61 +266,6 @@ print("Pipeline ID:", data.get("pipeline_id"))
 
 ---
 
-### 4. PHP ile Entegrasyon
-
-```php
-<?php
-$semaphoreOrg = "your-org";
-$apiToken = "sem_tok_xxxx";
-$projectId = "video-convert";
-
-$payload = [
-    "video_url"     => "https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/720/Big_Buck_Bunny_720_10s_30MB.mp4",
-    "webhook_url"   => "https://silly-island-20.webhook.cool",
-    "cdn_domain"    => "https://video-cdn.xfoy.dev",
-    "username"      => "huseyin",
-    "custom_id"     => "POST_1001",
-    "qualities"     => ["360p", "720p"],
-    "sprite"        => true,
-    "encrypt"       => false,
-    "storage_host"  => "u625088.your-storagebox.de",
-    "storage_user"  => "u625088-sub1",
-    "storage_pass"  => "videoCdn500!",
-    "storage_port"  => 23,
-    "target_dir"    => "hls"
-];
-
-$requestData = [
-    "project_id"    => $projectId,
-    "reference"     => "refs/heads/main",
-    "commit_sha"    => "HEAD",
-    "pipeline_file" => ".semaphore/semaphore.yml",
-    "parameters"    => [
-        "PAYLOAD_JSON" => json_encode($payload)
-    ]
-];
-
-$ch = curl_init("https://{$semaphoreOrg}.semaphoreci.com/api/v1alpha/plumber-workflows");
-curl_setopt($ch, CURLOPT_POST, true);
-curl_setopt($ch, CURLOPT_HTTPHEADER, [
-    "Authorization: Token {$apiToken}",
-    "Content-Type: application/json"
-]);
-curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($requestData));
-curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-curl_setopt($ch, CURLOPT_TIMEOUT, 10);
-
-$response = curl_exec($ch);
-curl_close($ch);
-
-$result = json_decode($response, true);
-echo "Workflow ID: " . $result["workflow_id"] . "\n";
-echo "Pipeline ID: " . $result["pipeline_id"] . "\n";
-?>
-```
-
----
-
 ### 5. Node.js / JavaScript ile Entegrasyon
 
 ```javascript
@@ -213,7 +273,7 @@ const axios = require('axios');
 
 const SEMAPHORE_ORG = "your-org";
 const SEMAPHORE_TOKEN = "sem_tok_xxxx";
-const PROJECT_ID = "video-convert";
+const PROJECT_UUID = "895e9d6d-7fd2-48e4-8623-558295f7cdca"; // Project UUID
 
 const payload = {
   video_url: "https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/720/Big_Buck_Bunny_720_10s_30MB.mp4",
@@ -232,7 +292,7 @@ const payload = {
 };
 
 axios.post(`https://${SEMAPHORE_ORG}.semaphoreci.com/api/v1alpha/plumber-workflows`, {
-  project_id: PROJECT_ID,
+  project_id: PROJECT_UUID,
   reference: "refs/heads/main",
   commit_sha: "HEAD",
   pipeline_file: ".semaphore/semaphore.yml",
