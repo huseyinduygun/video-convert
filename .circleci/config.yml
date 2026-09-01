@@ -67,8 +67,8 @@ jobs:
       - checkout
       - restore_cache:
           keys:
-            - static-ffmpeg-v2-{{ arch }}
-            - static-ffmpeg-v2
+            - static-tools-v3-{{ arch }}
+            - static-tools-v3
       - run:
           name: Setup Dependencies (FFmpeg, Aria2, SSHPass)
           command: |
@@ -76,7 +76,7 @@ jobs:
             export PATH="$HOME/bin:$PATH"
             rm -f "$HOME/bin/aria2c" "$HOME/bin/sshpass" 2>/dev/null || true
             if ! which ffmpeg >/dev/null 2>&1 || ! which ffprobe >/dev/null 2>&1; then
-              echo "Statik FFmpeg indiriliyor ve önbelleğe alınıyor..."
+              echo "Statik FFmpeg indiriliyor..."
               curl -sL https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz | tar -xJ --strip-components=1 -C "$HOME/bin" --wildcards "*/ffmpeg" "*/ffprobe" 2>/dev/null || true
               chmod +x "$HOME/bin/ffmpeg" "$HOME/bin/ffprobe" 2>/dev/null || true
             fi
@@ -85,13 +85,15 @@ jobs:
               sudo DEBIAN_FRONTEND=noninteractive apt-get update -qq
               sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends aria2 sshpass
             fi
-      - save_cache:
-          key: static-ffmpeg-v2-{{ arch }}
-          paths:
-            - ~/bin
       - run:
           name: Install Python Requirements
-          command: python3 -m pip install -q --no-cache-dir requests psutil || true
+          command: |
+            python3 -m pip install -q -r circlecivideocdn/requirements.txt || true
+      - save_cache:
+          key: static-tools-v3-{{ arch }}
+          paths:
+            - ~/bin
+            - ~/.cache/pip
       - run:
           name: Execute Video HLS Converter
           command: |
