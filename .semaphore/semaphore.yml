@@ -16,8 +16,8 @@ blocks:
         - name: "HLS Converter"
           commands:
             - checkout
-            - sudo apt-get update -qq
-            - sudo apt-get install -y --no-install-recommends curl aria2 rsync sshpass openssh-client xz-utils ca-certificates python3 python3-pip python3-requests python3-psutil ffmpeg
+            - sudo DEBIAN_FRONTEND=noninteractive apt-get update -qq
+            - sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" curl aria2 rsync sshpass openssh-client xz-utils ca-certificates python3 python3-pip python3-requests python3-psutil ffmpeg
             - python3 -m pip install -q -r semaphorevideocdn/requirements.txt || true
             - echo "=== Semaphore CI Video Converter Başlatılıyor ==="
             - python3 -m semaphorevideocdn.runner
