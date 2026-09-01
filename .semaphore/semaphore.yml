@@ -11,8 +11,6 @@ agent:
 
 blocks:
   - name: "Video Convert & Upload"
-    run:
-      when: "'${{parameters.PAYLOAD_JSON}}' != ''"
     task:
       jobs:
         - name: "HLS Converter"
