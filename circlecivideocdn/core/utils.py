@@ -52,31 +52,17 @@ class ResourceMonitor:
     def _monitor_loop(self):
         try:
             import psutil
-            parent_proc = psutil.Process()
-            parent_proc.cpu_percent(interval=None)
-            alloc_vcpus = float(os.cpu_count() or 4)
+            # İlk çağrı referans noktasını başlatır
+            psutil.cpu_percent(interval=None)
         except Exception:
             psutil = None
 
         while self._running:
             try:
                 if psutil:
-                    total_cpu = 0.0
-                    try:
-                        total_cpu += parent_proc.cpu_percent(interval=None)
-                    except Exception:
-                        pass
-                    try:
-                        for child in parent_proc.children(recursive=True):
-                            try:
-                                total_cpu += child.cpu_percent(interval=None)
-                            except Exception:
-                                pass
-                    except Exception:
-                        pass
-
-                    norm_cpu = round(total_cpu / alloc_vcpus, 1)
-                    self.cpu_samples.append(norm_cpu)
+                    sys_cpu = psutil.cpu_percent(interval=None)
+                    if sys_cpu is not None and sys_cpu > 0.0:
+                        self.cpu_samples.append(round(float(sys_cpu), 1))
                 else:
                     self.cpu_samples.append(0.0)
 
