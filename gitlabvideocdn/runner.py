@@ -418,7 +418,14 @@ def run_conversion(data: dict = None) -> int:
             os.makedirs(f"{work_dir}/{p['name']}", exist_ok=True)
 
         # FFmpeg komutunu oluştur
-        ffmpeg_cmd = ["ffmpeg", "-y", "-loglevel", "info", "-progress", "pipe:1"]
+        cpu_cores = os.cpu_count() or 4
+        ffmpeg_cmd = [
+            "ffmpeg", "-y",
+            "-threads", str(cpu_cores),
+            "-filter_complex_threads", str(cpu_cores),
+            "-loglevel", "info",
+            "-progress", "pipe:1"
+        ]
         if use_nvenc:
             ffmpeg_cmd += ["-hwaccel", "cuda"]
         ffmpeg_cmd += ["-i", input_file]
@@ -449,7 +456,7 @@ def run_conversion(data: dict = None) -> int:
 
         # Her varyant için mapping
         for idx, p in enumerate(active_profiles):
-            v_codec_args = ["-c:v", "h264_nvenc", "-preset", "p1", "-tune", "ll"] if use_nvenc else ["-c:v", "libx264", "-preset", "superfast", "-crf", p["crf"]]
+            v_codec_args = ["-c:v", "h264_nvenc", "-preset", "p1", "-tune", "ll"] if use_nvenc else ["-c:v", "libx264", "-preset", "superfast", "-threads", "0", "-crf", p["crf"]]
             ffmpeg_cmd += [
                 "-map", f"[v_out_{idx}]",
             ]
