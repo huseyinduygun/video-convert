@@ -18,6 +18,7 @@ from .config import (
     DEFAULT_WEB_DIR,
     INTERNAL_DOMAIN_IP_MAP,
     MAX_UPLOAD_WORKERS,
+    SECRET_KEY,
     WATERMARK_POSITIONS,
 )
 from .core.tracker import (
