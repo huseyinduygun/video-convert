@@ -273,7 +273,7 @@ def run_conversion(data: dict = None) -> int:
         download_success = False
         try:
             res_dl = subprocess.run(aria_cmd, capture_output=True, text=True)
-            if res_dl.returncode == 0 and os.path.exists(input_file):
+            if res_dl.returncode == 0 and os.path.exists(input_file) and os.path.getsize(input_file) > 1024:
                 download_success = True
             else:
                 print(f"[{video_id}] aria2c uyarısı/hatası, curl fallback deneniyor: {res_dl.stderr}")
@@ -281,10 +281,11 @@ def run_conversion(data: dict = None) -> int:
             print(f"[{video_id}] aria2c çağrısı başarısız ({dl_err}), curl fallback deneniyor...")
 
         if not download_success:
-            curl_cmd = ["curl", "-L", "-A", "Mozilla/5.0", "-o", input_file, video_url]
+            curl_cmd = ["curl", "-f", "-L", "-A", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)", "-o", input_file, video_url]
             res_curl = subprocess.run(curl_cmd, capture_output=True, text=True)
-            if res_curl.returncode != 0 or not os.path.exists(input_file):
-                raise RuntimeError(f"Video indirilemedi! curl: {res_curl.stderr}")
+            if res_curl.returncode != 0 or not os.path.exists(input_file) or os.path.getsize(input_file) <= 1024:
+                size_now = os.path.getsize(input_file) if os.path.exists(input_file) else 0
+                raise RuntimeError(f"Video indirilemedi veya geçersiz/boş dosya ({size_now} bayt)! URL bağlantısı süresi dolmuş veya erişilemiyor olabilir. Hata: {res_curl.stderr}")
 
         t_dl_end = time.time()
         dl_duration = round(t_dl_end - t_dl_start, 2)
