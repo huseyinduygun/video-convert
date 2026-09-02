@@ -19,18 +19,17 @@ blocks:
             - export PATH="$HOME/bin:$PATH"
             - cache restore static-tools-v4 || true
             - |
-              mkdir -p "$HOME/bin"
+              # 1. Statik FFmpeg & FFprobe (100% Bağımsız - John Van Sickle)
               if ! which ffmpeg >/dev/null 2>&1 || ! which ffprobe >/dev/null 2>&1; then
                 echo "Statik FFmpeg kuruluyor..."
                 curl -sL https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz | tar -xJ --strip-components=1 -C "$HOME/bin" --wildcards "*/ffmpeg" "*/ffprobe" 2>/dev/null || true
                 chmod +x "$HOME/bin/ffmpeg" "$HOME/bin/ffprobe" 2>/dev/null || true
               fi
-              if ! which aria2c >/dev/null 2>&1 || ! which sshpass >/dev/null 2>&1; then
-                echo "Aria2 & SSHPass kuruluyor ve önbelleğe alınıyor..."
+              # 2. Aria2 & SSHPass (Resmi Ubuntu Paketleri)
+              if ! which aria2c >/dev/null 2>&1 || ! which sshpass >/dev/null 2>&1 || ! aria2c --version >/dev/null 2>&1; then
+                echo "Aria2 & SSHPass kuruluyor..."
                 sudo DEBIAN_FRONTEND=noninteractive apt-get update -qq
                 sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends aria2 sshpass
-                cp /usr/bin/aria2c /usr/bin/sshpass "$HOME/bin/" 2>/dev/null || true
-                chmod +x "$HOME/bin/aria2c" "$HOME/bin/sshpass" 2>/dev/null || true
               fi
               cache store static-tools-v4 "$HOME/bin" "$HOME/.cache/pip" || true
             - python3 -m pip install -q --no-cache-dir requests psutil || true
