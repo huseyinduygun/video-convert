@@ -32,6 +32,7 @@ from .core.utils import (
     build_web_base_url,
     calc_target_dim,
     generate_metadata_and_poster,
+    generate_smart_posters,
     generate_timeline_sprite_and_vtt,
 )
 
@@ -528,16 +529,8 @@ def run_conversion(data: dict = None) -> int:
         if enable_sprite:
             generate_timeline_sprite_and_vtt(work_dir, input_file, probe_dur)
 
-        # Poster üret
-        if not os.path.exists(f"{work_dir}/poster.jpg"):
-            poster_sec = min(1.0, probe_dur / 2.0)
-            subprocess.run([
-                "ffmpeg", "-y", "-ss", str(poster_sec),
-                "-i", input_file,
-                "-vframes", "1",
-                "-q:v", "2",
-                f"{work_dir}/poster.jpg"
-            ], capture_output=True, text=True)
+        # Akıllı 3'lü Poster Üret (%20, %50, %80 en net kareler)
+        generate_smart_posters(work_dir, input_file, probe_dur)
 
         # info.json üret
         generate_metadata_and_poster(
@@ -684,6 +677,13 @@ def run_conversion(data: dict = None) -> int:
         has_poster = os.path.exists(f"{work_dir}/poster.jpg")
         has_sprite = os.path.exists(f"{work_dir}/sprite.jpg")
 
+        posters_list = []
+        for i in [1, 2, 3]:
+            if os.path.exists(f"{work_dir}/poster_{i}.jpg"):
+                posters_list.append(f"{base_web_url}/poster_{i}.jpg")
+
+        primary_poster_url = f"{base_web_url}/poster.jpg" if has_poster else (posters_list[0] if posters_list else None)
+
         tracker.send_event(step="completed", progress=100, status="completed", extra={
             "duration_seconds": round(probe_dur, 2),
             "duration": round(probe_dur, 2),
@@ -693,7 +693,8 @@ def run_conversion(data: dict = None) -> int:
             "encrypted": encrypt,
             "key_url": key_url if encrypt else None,
             "master_url": f"{base_web_url}/master.m3u8",
-            "poster_url": f"{base_web_url}/poster.jpg" if has_poster else None,
+            "poster_url": primary_poster_url,
+            "posters": posters_list if posters_list else ([primary_poster_url] if primary_poster_url else []),
             "sprite_url": f"{base_web_url}/sprite.jpg" if has_sprite else None,
             "vtt_url": f"{base_web_url}/thumbnails.vtt" if has_sprite else None,
             "info_json_url": f"{base_web_url}/info.json",

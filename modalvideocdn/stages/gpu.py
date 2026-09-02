@@ -13,6 +13,7 @@ from ..core import (
     ProgressTracker,
     setup_cancellation_and_timeout_handlers,
     generate_timeline_sprite_and_vtt,
+    generate_smart_posters,
     generate_metadata_and_poster,
     calc_target_dim,
     get_container_allocated_cpu,
@@ -409,6 +410,7 @@ def gpu_process_stage(
 
         t_post_start = time.time()
         generate_timeline_sprite_and_vtt(work_dir, input_file, total_duration)
+        generate_smart_posters(work_dir, input_file, total_duration)
         master_playlist_lines = ["#EXTM3U", "#EXT-X-VERSION:3"]
         if has_audio:
             master_playlist_lines.append('#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="audio",NAME="Audio",DEFAULT=YES,AUTOSELECT=YES,URI="audio/index.m3u8"')

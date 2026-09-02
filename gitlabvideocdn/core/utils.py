@@ -266,6 +266,49 @@ def generate_timeline_sprite_and_vtt(work_dir: str, input_file: str, total_durat
         return False
 
 
+def generate_smart_posters(work_dir: str, input_file: str, duration: float):
+    """
+    FFmpeg 'thumbnail' filtresini kullanarak videonun %20, %50 ve %80 dilimlerinden
+    en net ve temsil edici 3 adet poster (poster_1.jpg, poster_2.jpg, poster_3.jpg) üretir.
+    Eğer API'den özel bir poster.jpg geldiyse bu işlem tamamen atlanır.
+    """
+    default_poster = f"{work_dir}/poster.jpg"
+    if os.path.exists(default_poster) and os.path.getsize(default_poster) > 0:
+        # API'den özel poster zaten indirildi/geldi, otomatik üretimi atla
+        return
+
+    import shutil
+    dur = max(1.0, float(duration or 1.0))
+    time_points = [
+        ("poster_1.jpg", max(0.5, round(dur * 0.20, 2))),
+        ("poster_2.jpg", max(1.0, round(dur * 0.50, 2))),
+        ("poster_3.jpg", max(1.5, round(dur * 0.80, 2))),
+    ]
+
+    for filename, ss_time in time_points:
+        target_path = f"{work_dir}/{filename}"
+        if not os.path.exists(target_path):
+            try:
+                subprocess.run([
+                    "ffmpeg", "-y",
+                    "-ss", str(ss_time),
+                    "-i", input_file,
+                    "-vf", "thumbnail=30",
+                    "-vframes", "1",
+                    "-q:v", "2",
+                    target_path
+                ], capture_output=True, text=True, timeout=20)
+            except Exception as e:
+                print(f"[UYARI] {filename} poster üretim hatası: {e}")
+
+    if not os.path.exists(default_poster):
+        for candidate in ["poster_1.jpg", "poster_2.jpg", "poster_3.jpg"]:
+            cand_path = f"{work_dir}/{candidate}"
+            if os.path.exists(cand_path) and os.path.getsize(cand_path) > 0:
+                shutil.copy2(cand_path, default_poster)
+                break
+
+
 def generate_metadata_and_poster(
     work_dir: str, input_file: str, video_id: str, custom_id: str,
     username: str, server_config: dict, in_width: int, in_height: int,
@@ -294,6 +337,13 @@ def generate_metadata_and_poster(
         video_id
     )
 
+    posters_list = []
+    for i in [1, 2, 3]:
+        if os.path.exists(f"{work_dir}/poster_{i}.jpg"):
+            posters_list.append(f"{base_web_url}/poster_{i}.jpg")
+
+    primary_poster_url = f"{base_web_url}/poster.jpg" if has_poster else (posters_list[0] if posters_list else None)
+
     info_data = {
         "video_id": video_id,
         "custom_id": custom_id,
@@ -317,7 +367,8 @@ def generate_metadata_and_poster(
             } for p in active_profiles
         ],
         "master_url": f"{base_web_url}/master.m3u8",
-        "poster_url": f"{base_web_url}/poster.jpg" if has_poster else None,
+        "poster_url": primary_poster_url,
+        "posters": posters_list if posters_list else ([primary_poster_url] if primary_poster_url else []),
         "sprite_url": f"{base_web_url}/sprite.jpg" if has_sprite else None,
         "vtt_url": f"{base_web_url}/thumbnails.vtt" if has_sprite else None,
         "info_json_url": f"{base_web_url}/info.json",

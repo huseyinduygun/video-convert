@@ -214,8 +214,13 @@ def upload_stage(
             username, video_id
         )
 
+        posters_list = []
+        for i in [1, 2, 3]:
+            if os.path.exists(f"{work_dir}/poster_{i}.jpg"):
+                posters_list.append(f"{base_web_url}/poster_{i}.jpg")
+
         hls_final_url       = f"{base_web_url}/master.m3u8"
-        poster_final_url    = f"{base_web_url}/poster.jpg"     if os.path.exists(f"{work_dir}/poster.jpg")      else None
+        poster_final_url    = (f"{base_web_url}/poster.jpg" if os.path.exists(f"{work_dir}/poster.jpg") else (posters_list[0] if posters_list else None))
         sprite_final_url    = f"{base_web_url}/sprite.jpg"     if os.path.exists(f"{work_dir}/sprite.jpg")      else None
         vtt_final_url       = f"{base_web_url}/thumbnails.vtt" if os.path.exists(f"{work_dir}/thumbnails.vtt")  else None
         info_json_final_url = f"{base_web_url}/info.json"
@@ -276,7 +281,9 @@ def upload_stage(
 
         tracker.send_event(step="completed", progress=100, status="completed", extra={
             "hls_url": hls_final_url, "master_url": hls_final_url,
-            "poster_url": poster_final_url, "sprite_url": sprite_final_url,
+            "poster_url": poster_final_url,
+            "posters": posters_list if posters_list else ([poster_final_url] if poster_final_url else []),
+            "sprite_url": sprite_final_url,
             "vtt_url": vtt_final_url, "info_json_url": info_json_final_url,
             "duration_seconds": video_duration_seconds, "duration": video_duration_seconds,
             "duration_formatted": video_duration_formatted,
