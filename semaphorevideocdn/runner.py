@@ -272,14 +272,21 @@ def run_conversion(data: dict = None) -> int:
         ] + aria2_headers + [download_target_url]
 
         print(f"[{video_id}] aria2c indirme başlatılıyor (16x bağlantı)...")
-        res_dl = subprocess.run(aria_cmd, capture_output=True, text=True)
+        download_success = False
+        try:
+            res_dl = subprocess.run(aria_cmd, capture_output=True, text=True)
+            if res_dl.returncode == 0 and os.path.exists(input_file):
+                download_success = True
+            else:
+                print(f"[{video_id}] aria2c uyarısı/hatası, curl fallback deneniyor: {res_dl.stderr}")
+        except Exception as dl_err:
+            print(f"[{video_id}] aria2c çağrısı başarısız ({dl_err}), curl fallback deneniyor...")
 
-        if res_dl.returncode != 0 or not os.path.exists(input_file):
-            print(f"[{video_id}] aria2c uyarısı/hatası, curl fallback deneniyor: {res_dl.stderr}")
+        if not download_success:
             curl_cmd = ["curl", "-L", "-A", "Mozilla/5.0", "-o", input_file, video_url]
             res_curl = subprocess.run(curl_cmd, capture_output=True, text=True)
             if res_curl.returncode != 0 or not os.path.exists(input_file):
-                raise RuntimeError(f"Video indirilemedi! aria2c: {res_dl.stderr} | curl: {res_curl.stderr}")
+                raise RuntimeError(f"Video indirilemedi! curl: {res_curl.stderr}")
 
         t_dl_end = time.time()
         dl_duration = round(t_dl_end - t_dl_start, 2)
