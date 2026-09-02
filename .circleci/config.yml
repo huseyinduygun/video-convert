@@ -104,6 +104,21 @@ jobs:
             cat \<< 'EOF_PAYLOAD' > /tmp/circleci_payload.json
             << pipeline.parameters.PAYLOAD_JSON >>
             EOF_PAYLOAD
+            export VIDEO_URL="<< pipeline.parameters.VIDEO_URL >>"
+            export WEBHOOK_URL="<< pipeline.parameters.WEBHOOK_URL >>"
+            export CDN_DOMAIN="<< pipeline.parameters.CDN_DOMAIN >>"
+            export USERNAME="<< pipeline.parameters.USERNAME >>"
+            export CUSTOM_ID="<< pipeline.parameters.CUSTOM_ID >>"
+            export QUALITIES="<< pipeline.parameters.QUALITIES >>"
+            export STORAGE_HOST="<< pipeline.parameters.STORAGE_HOST >>"
+            export STORAGE_USER="<< pipeline.parameters.STORAGE_USER >>"
+            export STORAGE_PASS="<< pipeline.parameters.STORAGE_PASS >>"
+            export STORAGE_PORT="<< pipeline.parameters.STORAGE_PORT >>"
+            export TARGET_DIR="<< pipeline.parameters.TARGET_DIR >>"
+            export WEB_DIR="<< pipeline.parameters.WEB_DIR >>"
+            export ENABLE_SPRITE="<< pipeline.parameters.ENABLE_SPRITE >>"
+            export ENCRYPT="<< pipeline.parameters.ENCRYPT >>"
+            export KEY_URL="<< pipeline.parameters.KEY_URL >>"
             echo "=== CircleCI Video Converter Başlatılıyor ==="
             python3 -m circlecivideocdn.runner --payload-file /tmp/circleci_payload.json
       - run:
