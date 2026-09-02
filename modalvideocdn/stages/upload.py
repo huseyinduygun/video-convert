@@ -281,7 +281,7 @@ def upload_stage(
 
         tracker.send_event(step="completed", progress=100, status="completed", extra={
             "hls_url": hls_final_url, "master_url": hls_final_url,
-            "poster_url": poster_final_url,
+            "poster": poster_final_url,
             "posters": posters_list if posters_list else ([poster_final_url] if poster_final_url else []),
             "sprite_url": sprite_final_url,
             "vtt_url": vtt_final_url, "info_json_url": info_json_final_url,

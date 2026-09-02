@@ -693,7 +693,7 @@ def run_conversion(data: dict = None) -> int:
             "encrypted": encrypt,
             "key_url": key_url if encrypt else None,
             "master_url": f"{base_web_url}/master.m3u8",
-            "poster_url": primary_poster_url,
+            "poster": primary_poster_url,
             "posters": posters_list if posters_list else ([primary_poster_url] if primary_poster_url else []),
             "sprite_url": f"{base_web_url}/sprite.jpg" if has_sprite else None,
             "vtt_url": f"{base_web_url}/thumbnails.vtt" if has_sprite else None,
