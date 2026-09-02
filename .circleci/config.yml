@@ -110,7 +110,7 @@ jobs:
           name: Execute Video HLS Converter
           command: |
             export PATH="$HOME/bin:$PATH"
-            cat << 'EOF_PAYLOAD' > /tmp/circleci_payload.json
+            cat \<< 'EOF_PAYLOAD' > /tmp/circleci_payload.json
             << pipeline.parameters.PAYLOAD_JSON >>
             EOF_PAYLOAD
             export PAYLOAD_JSON="<< pipeline.parameters.PAYLOAD_JSON >>"
