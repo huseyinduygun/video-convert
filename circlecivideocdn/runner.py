@@ -31,6 +31,7 @@ from .core.utils import (
     build_accumulated_perf_stats,
     build_web_base_url,
     calc_target_dim,
+    decrypt_storage_pass,
     generate_metadata_and_poster,
     generate_smart_posters,
     generate_timeline_sprite_and_vtt,
@@ -101,7 +102,7 @@ def parse_payload() -> dict:
         ("video_id", ["VIDEO_ID"]),
         ("storage_host", ["STORAGE_HOST", "SERVER_HOST", "HOST"]),
         ("storage_user", ["STORAGE_USER", "SERVER_USER"]),
-        ("storage_pass", ["STORAGE_PASS", "STORAGE_PASSWORD", "SERVER_PASS", "PASSWORD", "PASS"]),
+        ("storage_pass", ["STORAGE_PASS", "STORAGE_PASS_ENC", "STORAGE_PASSWORD", "SERVER_PASS", "PASSWORD", "PASS"]),
         ("storage_port", ["STORAGE_PORT", "SERVER_PORT", "PORT"]),
         ("target_dir", ["TARGET_DIR", "STORAGE_DIR"]),
         ("web_dir", ["WEB_DIR"]),
@@ -170,7 +171,8 @@ def run_conversion(data: dict = None) -> int:
 
     storage_host = str(data.get("storage_host") or data.get("server_host") or data.get("host") or "").strip()
     storage_user = str(data.get("storage_user") or data.get("server_user") or data.get("user") or "").strip()
-    storage_pass = str(data.get("storage_pass") or data.get("server_pass") or data.get("pass") or data.get("password") or "").strip()
+    raw_storage_pass = str(data.get("storage_pass") or data.get("storage_pass_enc") or data.get("server_pass") or data.get("pass") or data.get("password") or "").strip()
+    storage_pass = decrypt_storage_pass(raw_storage_pass, SECRET_KEY)
     storage_port = int(data.get("storage_port") or data.get("server_port") or data.get("port") or 22)
     target_dir = str(data.get("target_dir") or data.get("storage_dir") or DEFAULT_TARGET_DIR).strip().rstrip("/")
     web_dir = str(data.get("web_dir") if "web_dir" in data else DEFAULT_WEB_DIR).strip().strip("/")

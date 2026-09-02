@@ -1,3 +1,4 @@
+import base64
 import os
 import subprocess
 import concurrent.futures
@@ -15,6 +16,52 @@ from ..config.settings import (
     STAGE_CFG_ENCODE_GPU, STAGE_CFG_UPLOAD, PRICING_VCPU_SEC,
     PRICING_RAM_GB_SEC, PRICING_ACTIVE_GPU_SEC, PRICING_GPU_MAP
 )
+
+
+def decrypt_storage_pass(pass_str: str, secret_key: str = None) -> str:
+    """
+    SFTP / Storage şifresini çözümler:
+    1. 'enc:' ile başlıyorsa: AES-256-CBC (OpenSSL / PHP uyumlu) şifresini çözer.
+    2. 'b64:' ile başlıyorsa: Base64 kodunu çözer.
+    3. Normal düz metin (Plaintext) ise: Olduğu gibi döner.
+    """
+    if not pass_str or not isinstance(pass_str, str):
+        return ""
+
+    pass_str = pass_str.strip()
+    sec_key = secret_key or SECRET_KEY
+
+    # 1. Base64 Çözümü
+    if pass_str.startswith("b64:"):
+        try:
+            return base64.b64decode(pass_str[4:]).decode("utf-8")
+        except Exception as err:
+            print(f"[UYARI] storage_pass b64 çözme hatası: {err}")
+            return pass_str
+
+    # 2. AES-256-CBC Şifre Çözümü (PHP openssl_encrypt uyumlu)
+    if pass_str.startswith("enc:"):
+        try:
+            raw_bytes = base64.b64decode(pass_str[4:])
+            if len(raw_bytes) > 16:
+                iv_hex = raw_bytes[:16].hex()
+                cipher_bytes = raw_bytes[16:]
+                k_hex = hashlib.sha256(sec_key.encode("utf-8")).hexdigest()
+                dec_cmd = [
+                    "openssl", "enc", "-d", "-aes-256-cbc",
+                    "-K", k_hex,
+                    "-iv", iv_hex
+                ]
+                res = subprocess.run(dec_cmd, input=cipher_bytes, capture_output=True, timeout=5)
+                if res.returncode == 0 and res.stdout:
+                    return res.stdout.decode("utf-8")
+                else:
+                    print(f"[UYARI] storage_pass OpenSSL şifre çözme hatası: {res.stderr.decode('utf-8', errors='ignore')}")
+        except Exception as err:
+            print(f"[UYARI] storage_pass enc çözme hatası: {err}")
+
+    # 3. Düz metin (Plaintext)
+    return pass_str
 
 
 def get_container_allocated_cpu(default_cpu: float = 8.0) -> str:
@@ -171,7 +218,7 @@ def check_storage_server_connection(host: str, port: int, user: str, password: s
 
     try:
         env = os.environ.copy()
-        env["SSHPASS"] = password
+        env["SSHPASS"] = decrypt_storage_pass(password, SECRET_KEY)
         check_cmd = [
             "sshpass", "-e",
             "rsync", "--dry-run", "--quiet",

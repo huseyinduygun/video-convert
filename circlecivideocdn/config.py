@@ -1,7 +1,7 @@
 import os
 
 ADMIN_TOKEN = os.environ.get("ADMIN_TOKEN", "7b6bcfdf9f086fb4b5bfefcbbcfd6f8f")
-SECRET_KEY = os.environ.get("SECRET_KEY", "b3f9c7a1e5d28406193748201a5b8c9d")
+SECRET_KEY = os.environ.get("SECRET_KEY", "hls_sec_3b5a7d9e1f2c4b6a8d0e2f4a6b8c0d2e4f6a8b0c2d4e6f8a")
 
 DEFAULT_PROFILES = [
     {

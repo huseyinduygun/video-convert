@@ -5,7 +5,7 @@ import uuid
 import modal
 
 from ..config import app, volume, DEFAULT_TARGET_DIR, DEFAULT_WEB_DIR, STAGE_CFG_API
-from ..core import image_cpu, verify_request_auth, check_storage_server_connection, build_web_base_url
+from ..core import image_cpu, verify_request_auth, check_storage_server_connection, build_web_base_url, decrypt_storage_pass
 from ..stages import download_stage
 
 
@@ -69,7 +69,7 @@ def convert_request(data: dict):
 
     raw_storage_host = data.get("storage_host") or data.get("server_host") or data.get("host")
     raw_storage_user = data.get("storage_user") or data.get("server_user") or data.get("user")
-    raw_storage_pass = data.get("storage_pass") or data.get("server_pass") or data.get("pass") or data.get("password")
+    raw_storage_pass = data.get("storage_pass") or data.get("storage_pass_enc") or data.get("server_pass") or data.get("pass") or data.get("password")
 
     if not raw_storage_host or not str(raw_storage_host).strip():
         return {"status": "error", "status_code": 400, "message": "storage_host parametresi zorunludur!"}, 400
@@ -80,7 +80,7 @@ def convert_request(data: dict):
 
     storage_host = str(raw_storage_host).strip()
     storage_user = str(raw_storage_user).strip()
-    storage_pass = str(raw_storage_pass).strip()
+    storage_pass = decrypt_storage_pass(str(raw_storage_pass).strip())
     storage_port = int(data.get("storage_port") or data.get("server_port") or data.get("port") or 22)
     target_dir   = str(data.get("target_dir") or data.get("storage_dir") or DEFAULT_TARGET_DIR).strip().rstrip("/")
     web_dir      = str(data.get("web_dir") if "web_dir" in data else DEFAULT_WEB_DIR).strip().strip("/")

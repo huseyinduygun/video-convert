@@ -303,10 +303,43 @@ curl -H "Circle-Token: {api_token}" \
 | `key_url` | String | *Encrypt ise* | `null` | Oynatıcının şifre anahtarını alacağı URI |
 | `storage_host`| String | **Evet** | - | Hetzner Storage Box / SSH IP adresi |
 | `storage_user`| String | **Evet** | - | SSH Kullanıcı adı |
-| `storage_pass`| String | **Evet** | - | SSH Şifresi |
+| `storage_pass`| String | **Evet** | - | SSH Şifresi (Düz metin, `enc:` ile AES-256 şifreli veya `b64:` ile Base64) |
 | `storage_port`| Integer| Hayır | `22` | SSH Portu (Hetzner için `23`) |
 | `target_dir` | String | Hayır | `hls` | Hedef sunucudaki ana dizin |
 | `web_dir` | String | Hayır | `""` | CDN alt web dizini (Boşsa doğrudan domain/{user}/{id}) |
+
+---
+
+### 🔒 Güvenli SFTP Şifresi Gönderimi (Şifreli / Plaintext Seçenekleri)
+
+`storage_pass` parametresini 3 farklı formatta gönderebilirsiniz:
+
+1. **Düz Metin (Plaintext - Orijinal Hali):**
+   ```json
+   "storage_pass": "videoCdn500!"
+   ```
+2. **AES-256-CBC Şifreli (`enc:...` - Önerilen Güvenli Yöntem):**
+   ```json
+   "storage_pass": "enc:Bxj0PIlWGqBbNp9qc6tc/XFM/00KC4gGQjsbYU5Fog0="
+   ```
+   *(veya alternatif parametre adı: `"storage_pass_enc": "enc:..."`)*
+3. **Base64 Kodlu (`b64:...`):**
+   ```json
+   "storage_pass": "b64:dmlkZW9DZG41MDAh"
+   ```
+
+#### 🐘 PHP ile Şifreleme Yardımcı Fonksiyonu:
+```php
+function encryptStoragePass(string $plainPassword, string $secretKey = 'hls_sec_3b5a7d9e1f2c4b6a8d0e2f4a6b8c0d2e4f6a8b0c2d4e6f8a'): string {
+    $key = hash('sha256', $secretKey, true);
+    $iv = openssl_random_pseudo_bytes(16);
+    $ciphertext = openssl_encrypt($plainPassword, 'AES-256-CBC', $key, OPENSSL_RAW_DATA, $iv);
+    return 'enc:' . base64_encode($iv . $ciphertext);
+}
+
+// Kullanım:
+$payload['storage_pass'] = encryptStoragePass('videoCdn500!');
+```
 
 ---
 

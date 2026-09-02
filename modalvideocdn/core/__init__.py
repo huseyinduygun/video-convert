@@ -23,6 +23,7 @@ from .utils import (
     calc_optimal_cpu,
     build_accumulated_perf_stats,
     ResourceMonitor,
+    decrypt_storage_pass,
 )
 
 __all__ = [
@@ -46,5 +47,7 @@ __all__ = [
     "get_container_allocated_cpu",
     "calc_optimal_cpu",
     "build_accumulated_perf_stats",
+    "ResourceMonitor",
+    "decrypt_storage_pass",
 ]
 

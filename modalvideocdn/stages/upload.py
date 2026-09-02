@@ -20,6 +20,7 @@ from ..core import (
     check_and_raise_cancellation,
     TaskCancelledOrTimeout,
     build_accumulated_perf_stats,
+    decrypt_storage_pass,
 )
 
 
@@ -66,7 +67,8 @@ def upload_stage(
         total_upload_mb = total_upload_bytes / (1024 * 1024)
 
         env = os.environ.copy()
-        env["SSHPASS"] = server_config["pass"]
+        raw_pass = server_config.get("pass") or server_config.get("storage_pass") or server_config.get("storage_pass_enc") or ""
+        env["SSHPASS"] = decrypt_storage_pass(raw_pass)
 
         ctl_path = f"/tmp/ssh_ctl_{video_id}_%r@%h_%p"
         ssh_opts = (

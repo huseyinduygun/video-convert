@@ -44,7 +44,40 @@
 * **🔐 HLS AES-128 Şifreleme (`"encrypt": true`):** İsteğe bağlı olarak tüm video parçaları 128-bit AES algoritması ile şifrelenir.
 * **🛑 İşlem Durdurma API Endpoint'i (`POST /cancel_request`):** Devam eden herhangi bir işlem anında durdurulur ve diski temizler.
 * **🗑️ Sunucudan Video Silme Endpoint'i (`POST /delete_request`):** Video silindiğinde aktif işlem varsa durdurulur ve depolama sunucusundaki klasörü rsync/SSH üzerinden silinir.
-* **🖼️ Timeline Sprite ve WebVTT Haritası (`"sprite": true`):** Oynatıcı seek barı için `sprite.jpg` ve `thumbnails.vtt` otomatik üretilir.
+* **🔒 Güvenli SFTP Şifresi Gönderimi (Şifreli / Plaintext):** `storage_pass` parametresi hem orijinal düz metin (`"videoCdn500!"`), hem AES-256-CBC ile şifrelenmiş (`"enc:..."`), hem de Base64 (`"b64:..."`) formatında gönderilebilir.
+
+---
+
+### 🔒 Güvenli SFTP Şifresi Gönderimi (Şifreli / Plaintext Seçenekleri)
+
+`storage_pass` parametresini 3 farklı formatta gönderebilirsiniz:
+
+1. **Düz Metin (Plaintext - Orijinal Hali):**
+   ```json
+   "storage_pass": "videoCdn500!"
+   ```
+2. **AES-256-CBC Şifreli (`enc:...` - Önerilen Güvenli Yöntem):**
+   ```json
+   "storage_pass": "enc:Bxj0PIlWGqBbNp9qc6tc/XFM/00KC4gGQjsbYU5Fog0="
+   ```
+   *(veya alternatif parametre adı: `"storage_pass_enc": "enc:..."`)*
+3. **Base64 Kodlu (`b64:...`):**
+   ```json
+   "storage_pass": "b64:dmlkZW9DZG41MDAh"
+   ```
+
+#### 🐘 PHP ile Şifreleme Yardımcı Fonksiyonu:
+```php
+function encryptStoragePass(string $plainPassword, string $secretKey = 'hls_sec_3b5a7d9e1f2c4b6a8d0e2f4a6b8c0d2e4f6a8b0c2d4e6f8a'): string {
+    $key = hash('sha256', $secretKey, true);
+    $iv = openssl_random_pseudo_bytes(16);
+    $ciphertext = openssl_encrypt($plainPassword, 'AES-256-CBC', $key, OPENSSL_RAW_DATA, $iv);
+    return 'enc:' . base64_encode($iv . $ciphertext);
+}
+
+// Kullanım:
+$payload['storage_pass'] = encryptStoragePass('videoCdn500!');
+```
 
 ---
 
