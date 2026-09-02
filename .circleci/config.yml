@@ -110,6 +110,9 @@ jobs:
           name: Execute Video HLS Converter
           command: |
             export PATH="$HOME/bin:$PATH"
+            cat << 'EOF_PAYLOAD' > /tmp/circleci_payload.json
+            << pipeline.parameters.PAYLOAD_JSON >>
+            EOF_PAYLOAD
             export PAYLOAD_JSON="<< pipeline.parameters.PAYLOAD_JSON >>"
             export VIDEO_URL="<< pipeline.parameters.VIDEO_URL >>"
             export WEBHOOK_URL="<< pipeline.parameters.WEBHOOK_URL >>"
@@ -127,7 +130,7 @@ jobs:
             export ENCRYPT="<< pipeline.parameters.ENCRYPT >>"
             export KEY_URL="<< pipeline.parameters.KEY_URL >>"
             echo "=== CircleCI Video Converter Başlatılıyor ==="
-            python3 -m circlecivideocdn.runner
+            python3 -m circlecivideocdn.runner --payload-file /tmp/circleci_payload.json
       - run:
           name: Fallback Failure Webhook
           when: on_fail

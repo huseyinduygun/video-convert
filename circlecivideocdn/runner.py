@@ -59,7 +59,12 @@ def parse_payload() -> dict:
     elif args.payload_file and os.path.exists(args.payload_file):
         try:
             with open(args.payload_file, "r", encoding="utf-8") as f:
-                data = json.load(f)
+                content = f.read().strip()
+                if content:
+                    try:
+                        data = json.loads(content)
+                    except Exception:
+                        data = json.loads(content.replace(r'\"', '"'))
         except Exception as e:
             print(f"[UYARI] --payload-file okuma hatası: {e}")
 
