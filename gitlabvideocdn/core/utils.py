@@ -509,47 +509,52 @@ def fetch_gitlab_live_usage(token: str) -> float:
         return None
 
     import urllib.request
-    ns_id = os.environ.get("CI_PROJECT_NAMESPACE_ID") or os.environ.get("CI_PROJECT_ID")
-    candidate_ids = []
-    if ns_id:
-        candidate_ids.extend([
-            f"gid://gitlab/Namespaces::UserNamespace/{ns_id}",
-            f"gid://gitlab/Group/{ns_id}",
-            f"gid://gitlab/Namespace/{ns_id}"
-        ])
-
     graphql_url = "https://gitlab.com/api/graphql"
-    for gid in candidate_ids:
-        query = {
-            "query": """
-            query getCiMinutesUsage($id: ID!) {
-              ciMinutesUsage(namespaceId: $id) {
-                nodes {
-                  month
-                  minutes
-                }
-              }
+
+    try:
+        # 1. Adım: Token sahibinin namespace GID'sini dinamik olarak çek
+        user_query = {"query": "query { currentUser { namespace { id } } }"}
+        req1 = urllib.request.Request(
+            graphql_url,
+            data=json.dumps(user_query).encode("utf-8"),
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {clean_tok}",
+                "User-Agent": "GitLabVideoCDN/1.0"
             }
-            """,
-            "variables": {"id": gid}
+        )
+        with urllib.request.urlopen(req1, timeout=5) as res1:
+            u_data = json.loads(res1.read().decode("utf-8"))
+            ns_gid = u_data.get("data", {}).get("currentUser", {}).get("namespace", {}).get("id")
+
+        if not ns_gid:
+            # Fallback: CI ortamından gelen ID varsa dene
+            ns_id = os.environ.get("CI_PROJECT_NAMESPACE_ID") or os.environ.get("CI_PROJECT_ID")
+            if ns_id:
+                ns_gid = f"gid://gitlab/Namespaces::UserNamespace/{ns_id}"
+            else:
+                return None
+
+        # 2. Adım: Bu namespace için ciMinutesUsage verisini çek
+        usage_query = {
+            "query": f'query {{ ciMinutesUsage(namespaceId: "{ns_gid}") {{ nodes {{ month minutes sharedRunnersDuration }} }} }}'
         }
-        try:
-            req = urllib.request.Request(
-                graphql_url,
-                data=json.dumps(query).encode("utf-8"),
-                headers={
-                    "Content-Type": "application/json",
-                    "Authorization": f"Bearer {clean_tok}",
-                    "User-Agent": "GitLabVideoCDN/1.0"
-                }
-            )
-            with urllib.request.urlopen(req, timeout=4) as res:
-                body = json.loads(res.read().decode("utf-8"))
-                nodes = body.get("data", {}).get("ciMinutesUsage", {}).get("nodes", [])
-                if nodes and "minutes" in nodes[0] and nodes[0]["minutes"] is not None:
-                    return float(nodes[0]["minutes"])
-        except Exception:
-            pass
+        req2 = urllib.request.Request(
+            graphql_url,
+            data=json.dumps(usage_query).encode("utf-8"),
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {clean_tok}",
+                "User-Agent": "GitLabVideoCDN/1.0"
+            }
+        )
+        with urllib.request.urlopen(req2, timeout=5) as res2:
+            body = json.loads(res2.read().decode("utf-8"))
+            nodes = body.get("data", {}).get("ciMinutesUsage", {}).get("nodes", [])
+            if nodes and "minutes" in nodes[0] and nodes[0]["minutes"] is not None:
+                return float(nodes[0]["minutes"])
+    except Exception as e:
+        print(f"[GitLab Billing] Canlı kota çekilemedi: {e}")
 
     return None
 

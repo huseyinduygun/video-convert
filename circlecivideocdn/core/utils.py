@@ -430,46 +430,51 @@ def build_web_base_url(cdn_domain: str, web_dir: str, username: str, video_id: s
 
 def fetch_circleci_live_usage(token: str) -> float:
     """
-    CircleCI Insights API üzerinden son 30 günde harcanan toplam compute kredisini çeker.
+    CircleCI Insights API üzerinden harcanan toplam compute kredisini çeker.
     """
     if not token or not str(token).strip():
         return None
 
     clean_tok = str(token).strip()
     import urllib.request
+    headers = {
+        "Circle-Token": clean_tok,
+        "Accept": "application/json",
+        "User-Agent": "CircleCIVideoCDN/1.0"
+    }
 
-    username = os.environ.get("CIRCLE_PROJECT_USERNAME")
-    reponame = os.environ.get("CIRCLE_PROJECT_REPONAME")
+    try:
+        # 1. Adım: Kullanıcının organizasyon slug'ını dinamik olarak çek
+        req1 = urllib.request.Request("https://circleci.com/api/v2/me/collaborations", headers=headers)
+        with urllib.request.urlopen(req1, timeout=5) as res1:
+            collabs = json.loads(res1.read().decode("utf-8"))
 
-    candidate_slugs = []
-    if username and reponame:
-        candidate_slugs.extend([f"gl/{username}/{reponame}", f"gh/{username}/{reponame}"])
+        candidate_slugs = []
+        if collabs:
+            for c in collabs:
+                if c.get("slug"):
+                    candidate_slugs.append(c["slug"])
 
-    # Eğer env'den gelmediyse bilinen proje slug'ını dene
-    candidate_slugs.extend(["gl/huseyinduygun/video-convert", "gh/huseyinduygun/video-convert"])
+        # Fallback slug'lar
+        username = os.environ.get("CIRCLE_PROJECT_USERNAME")
+        reponame = os.environ.get("CIRCLE_PROJECT_REPONAME")
+        if username and reponame:
+            candidate_slugs.extend([f"circleci/{username}/{reponame}", f"gl/{username}/{reponame}", f"gh/{username}/{reponame}"])
 
-    for slug in candidate_slugs:
-        url = f"https://circleci.com/api/v2/insights/{slug}/workflows?reporting-window=last-30-days"
-        req = urllib.request.Request(
-            url,
-            headers={
-                "Circle-Token": clean_tok,
-                "Accept": "application/json",
-                "User-Agent": "CircleCIVideoCDN/1.0"
-            }
-        )
-        try:
-            with urllib.request.urlopen(req, timeout=4) as res:
-                body = json.loads(res.read().decode("utf-8"))
-                items = body.get("items", [])
-                total_used = 0.0
-                for it in items:
-                    metrics = it.get("metrics", {})
-                    total_used += float(metrics.get("total_credits_used", 0.0))
-                if items:
-                    return round(total_used, 2)
-        except Exception:
-            pass
+        for slug in candidate_slugs:
+            url = f"https://circleci.com/api/v2/insights/{slug}/summary"
+            req2 = urllib.request.Request(url, headers=headers)
+            try:
+                with urllib.request.urlopen(req2, timeout=5) as res2:
+                    body = json.loads(res2.read().decode("utf-8"))
+                    metrics = body.get("org_data", {}).get("metrics", {})
+                    used_credits = metrics.get("total_credits_used")
+                    if used_credits is not None:
+                        return float(used_credits)
+            except Exception:
+                pass
+    except Exception as e:
+        print(f"[CircleCI Billing] Canlı kullanım çekilemedi: {e}")
 
     return None
 

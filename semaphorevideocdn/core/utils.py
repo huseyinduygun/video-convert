@@ -504,34 +504,64 @@ def fetch_semaphore_live_usage(token: str) -> float:
 
     clean_tok = str(token).strip()
     import urllib.request
+    from datetime import datetime, timezone
+
+    headers = {
+        "Authorization": f"Token {clean_tok}",
+        "Accept": "application/json",
+        "User-Agent": "SemaphoreCI v2.0 Client"
+    }
 
     org_url = os.environ.get("SEMAPHORE_ORGANIZATION_URL")
-    candidate_urls = []
+    base_urls = []
     if org_url:
-        clean_org = org_url.rstrip("/")
-        candidate_urls.extend([
-            f"{clean_org}/api/v1alpha/insights/spending",
-            f"{clean_org}/api/v1alpha/usage",
-            f"{clean_org}/api/v1alpha/spending"
-        ])
+        base_urls.append(org_url.rstrip("/"))
+    base_urls.extend(["https://huseyinduygun.semaphoreci.com"])
 
-    for url in candidate_urls:
-        req = urllib.request.Request(
-            url,
-            headers={
-                "Authorization": f"Token {clean_tok}",
-                "Accept": "application/json",
-                "User-Agent": "SemaphoreCI v2.0 Client"
-            }
-        )
+    for base in base_urls:
         try:
-            with urllib.request.urlopen(req, timeout=4) as res:
-                body = json.loads(res.read().decode("utf-8"))
-                used = body.get("minutes_used") or body.get("used_minutes") or body.get("total_minutes")
-                if used is not None:
-                    return float(used)
-        except Exception:
-            pass
+            req_p = urllib.request.Request(f"{base}/api/v1alpha/projects", headers=headers)
+            with urllib.request.urlopen(req_p, timeout=5) as res_p:
+                projs = json.loads(res_p.read().decode("utf-8"))
+            if not projs:
+                continue
+
+            proj_id = projs[0].get("metadata", {}).get("id")
+            if not proj_id:
+                continue
+
+            req_wf = urllib.request.Request(f"{base}/api/v1alpha/plumber-workflows?project_id={proj_id}", headers=headers)
+            with urllib.request.urlopen(req_wf, timeout=5) as res_wf:
+                wfs = json.loads(res_wf.read().decode("utf-8"))
+
+            now = datetime.now(timezone.utc)
+            current_month_prefix = now.strftime("%Y-%m")
+
+            total_duration_sec = 0.0
+            for wf in wfs[:30]:
+                ppl_id = wf.get("initial_ppl_id")
+                if not ppl_id:
+                    continue
+                try:
+                    req_ppl = urllib.request.Request(f"{base}/api/v1alpha/pipelines/{ppl_id}", headers=headers)
+                    with urllib.request.urlopen(req_ppl, timeout=3) as res_ppl:
+                        p = json.loads(res_ppl.read().decode("utf-8")).get("pipeline", {})
+                        created_at = p.get("created_at", "")
+                        if not created_at.startswith(current_month_prefix):
+                            continue
+                        running_at = p.get("running_at", "")
+                        done_at = p.get("done_at", "")
+                        if running_at and done_at and not running_at.startswith("1970") and p.get("state") == "done":
+                            t_start = datetime.strptime(running_at[:19], "%Y-%m-%d %H:%M:%S")
+                            t_end = datetime.strptime(done_at[:19], "%Y-%m-%d %H:%M:%S")
+                            dur = max(0.0, (t_end - t_start).total_seconds())
+                            total_duration_sec += dur
+                except Exception:
+                    pass
+
+            return round(total_duration_sec / 60.0, 2)
+        except Exception as e:
+            print(f"[Semaphore Billing] Canlı kullanım çekilemedi: {e}")
 
     return None
 
