@@ -495,10 +495,70 @@ def build_accumulated_perf_stats(work_dir: str, start_time: float) -> dict:
     return stats
 
 
+def fetch_gitlab_live_usage(token: str) -> float:
+    """
+    GitLab GraphQL API üzerinden bu ayki harcanan toplam paylaşımlı runner dakikasını çeker.
+    Token: Personal Access Token (read_api yetkili glpat-...)
+    """
+    if not token or not str(token).strip():
+        return None
+
+    clean_tok = str(token).strip()
+    if clean_tok.startswith("glptt-"):
+        # Pipeline Trigger Token'larının fatura/kota okuma yetkisi yoktur
+        return None
+
+    import urllib.request
+    ns_id = os.environ.get("CI_PROJECT_NAMESPACE_ID") or os.environ.get("CI_PROJECT_ID")
+    candidate_ids = []
+    if ns_id:
+        candidate_ids.extend([
+            f"gid://gitlab/Namespaces::UserNamespace/{ns_id}",
+            f"gid://gitlab/Group/{ns_id}",
+            f"gid://gitlab/Namespace/{ns_id}"
+        ])
+
+    graphql_url = "https://gitlab.com/api/graphql"
+    for gid in candidate_ids:
+        query = {
+            "query": """
+            query getCiMinutesUsage($id: ID!) {
+              ciMinutesUsage(namespaceId: $id) {
+                nodes {
+                  month
+                  minutes
+                }
+              }
+            }
+            """,
+            "variables": {"id": gid}
+        }
+        try:
+            req = urllib.request.Request(
+                graphql_url,
+                data=json.dumps(query).encode("utf-8"),
+                headers={
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {clean_tok}",
+                    "User-Agent": "GitLabVideoCDN/1.0"
+                }
+            )
+            with urllib.request.urlopen(req, timeout=4) as res:
+                body = json.loads(res.read().decode("utf-8"))
+                nodes = body.get("data", {}).get("ciMinutesUsage", {}).get("nodes", [])
+                if nodes and "minutes" in nodes[0] and nodes[0]["minutes"] is not None:
+                    return float(nodes[0]["minutes"])
+        except Exception:
+            pass
+
+    return None
+
+
 def calculate_gitlab_credits(elapsed_sec: float, input_data: dict = None) -> dict:
     """
     GitLab CI/CD Kota & Kredi Hesaplama:
     GitLab Free Tier: Aylık 400 paylaşımlı işlem dakikası (compute minutes) verir.
+    Eğer gitlab_token parametresi verilirse GitLab GraphQL API'sinden canlı harcanan dakikayı çeker.
     """
     input_data = input_data or {}
     TOTAL_MINUTES = float(os.environ.get("GITLAB_TOTAL_MINUTES") or input_data.get("total_minutes") or 400.0)
@@ -506,18 +566,32 @@ def calculate_gitlab_credits(elapsed_sec: float, input_data: dict = None) -> dic
     # Bu işleme ait harcanan süre (dakika cinsinden)
     job_minutes = round(elapsed_sec / 60.0, 2)
 
-    raw_current = (
-        input_data.get("current_credits")
-        or input_data.get("remaining_credits")
-        or os.environ.get("GITLAB_REMAINING_MINUTES")
+    # 1. Yöntem: GitLab API Token ile canlı kullanım sorgusu dene
+    api_token = (
+        input_data.get("gitlab_token")
+        or input_data.get("api_token")
+        or input_data.get("token")
+        or os.environ.get("GITLAB_API_TOKEN")
+        or os.environ.get("GITLAB_TOKEN")
     )
-    if raw_current is not None:
-        try:
-            rem_val = max(0.0, round(float(raw_current) - job_minutes, 2))
-        except (ValueError, TypeError):
-            rem_val = max(0.0, round(TOTAL_MINUTES - job_minutes, 2))
+    live_used_minutes = fetch_gitlab_live_usage(api_token) if api_token else None
+
+    if live_used_minutes is not None:
+        rem_val = max(0.0, round(TOTAL_MINUTES - live_used_minutes, 2))
     else:
-        rem_val = max(0.0, round(TOTAL_MINUTES - job_minutes, 2))
+        # 2. Yöntem: PHP'den gelen güncel bakiye üzerinden düş
+        raw_current = (
+            input_data.get("current_credits")
+            or input_data.get("remaining_credits")
+            or os.environ.get("GITLAB_REMAINING_MINUTES")
+        )
+        if raw_current is not None:
+            try:
+                rem_val = max(0.0, round(float(raw_current) - job_minutes, 2))
+            except (ValueError, TypeError):
+                rem_val = max(0.0, round(TOTAL_MINUTES - job_minutes, 2))
+        else:
+            rem_val = max(0.0, round(TOTAL_MINUTES - job_minutes, 2))
 
     pct_rem = round((rem_val / TOTAL_MINUTES) * 100, 2) if TOTAL_MINUTES > 0 else 0.0
 
@@ -528,6 +602,7 @@ def calculate_gitlab_credits(elapsed_sec: float, input_data: dict = None) -> dic
             "remaining": rem_val,
             "total": TOTAL_MINUTES,
             "job_used": job_minutes,
+            "live_synced": live_used_minutes is not None,
             "percent_remaining": pct_rem,
             "unit": "minutes"
         },
@@ -538,4 +613,5 @@ def calculate_gitlab_credits(elapsed_sec: float, input_data: dict = None) -> dic
             "unit": "minutes"
         }
     }
+
 
