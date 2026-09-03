@@ -21,6 +21,7 @@ from ..core import (
     TaskCancelledOrTimeout,
     build_accumulated_perf_stats,
     decrypt_storage_pass,
+    fetch_modal_workspace_billing,
 )
 
 
@@ -278,6 +279,18 @@ def upload_stage(
         elapsed_sec = round(time.time() - start_time, 2)
         perf_stats = build_accumulated_perf_stats(work_dir, start_time)
 
+        # Modal Workspace Bakiye / Kalan Kredi Bilgisini Çek
+        billing_info = fetch_modal_workspace_billing()
+        remaining_credits = billing_info.get("remaining_credits") if billing_info.get("available") else None
+        credit_unit = billing_info.get("credit_unit", "usd")
+        credits_dict = billing_info.get("credits") if billing_info.get("available") else None
+        billing_dict = billing_info.get("billing") if billing_info.get("available") else None
+
+        if credits_dict:
+            perf_stats["credits"] = credits_dict
+        if billing_dict:
+            perf_stats["billing"] = billing_dict
+
         print(f"[{video_id}] 5. İşlem bitti ({elapsed_sec}s, Video Süresi: {video_duration_seconds}s)")
         print(f"[PERF_PROFILE] [{video_id}] ÖZET METRİKLER:\n" + json.dumps(perf_stats, indent=2, ensure_ascii=False))
 
@@ -292,6 +305,10 @@ def upload_stage(
             "encrypted": has_encryption, "key_url": encrypted_key_url,
             "username": username, "cdn_domain": server_config["cdn_domain"],
             "qualities": target_qualities,
+            "remaining_credits": remaining_credits,
+            "credit_unit": credit_unit,
+            "credits": credits_dict,
+            "billing": billing_dict,
             "elapsed_time_seconds": elapsed_sec, "processing_time": f"{elapsed_sec}s",
             "perf_stats": perf_stats
         })

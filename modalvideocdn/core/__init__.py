@@ -24,6 +24,7 @@ from .utils import (
     build_accumulated_perf_stats,
     ResourceMonitor,
     decrypt_storage_pass,
+    fetch_modal_workspace_billing,
 )
 
 __all__ = [
@@ -49,5 +50,6 @@ __all__ = [
     "build_accumulated_perf_stats",
     "ResourceMonitor",
     "decrypt_storage_pass",
+    "fetch_modal_workspace_billing",
 ]
 

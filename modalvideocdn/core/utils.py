@@ -645,3 +645,64 @@ def build_accumulated_perf_stats(work_dir: str, start_time: float) -> dict:
     }
     return stats
 
+
+def fetch_modal_workspace_billing() -> dict:
+    """
+    Modal Workspace faturalandırma ve kalan kredi durumu:
+    Modal Python SDK (Workspace.billing.summary) üzerinden anlık olarak bu ayki
+    harcanan toplam tutarı (metered_cost), faturalandırılacak tutarı (billed_cost)
+    ve kalan $30.00 ücretsiz kullanım kredisini (remaining_credits) hesaplar.
+    """
+    try:
+        import modal
+        ws = modal.Workspace.from_context()
+        summary = ws.billing.summary(cycle="this month")
+
+        metered = float(summary.metered_cost) if hasattr(summary, "metered_cost") else 0.0
+        billed = float(summary.billed_cost) if hasattr(summary, "billed_cost") else 0.0
+
+        # Modal Starter Free Plan: $30.00/aylık ücretsiz kullanım kredisi
+        FREE_CREDIT_USD = 30.00
+        remaining_credits = max(0.0, round(FREE_CREDIT_USD - metered, 4))
+        used_credits = round(metered, 4)
+        credit_pct = round((remaining_credits / FREE_CREDIT_USD) * 100, 2)
+
+        breakdown = {}
+        if hasattr(summary, "metered_cost_breakdown") and summary.metered_cost_breakdown:
+            for k, v in summary.metered_cost_breakdown.items():
+                breakdown[k] = float(v)
+
+        adjustments = {}
+        if hasattr(summary, "adjustments") and summary.adjustments:
+            for k, v in summary.adjustments.items():
+                adjustments[k] = float(v)
+
+        return {
+            "available": True,
+            "remaining_credits": remaining_credits,
+            "credit_unit": "usd",
+            "credits": {
+                "remaining": remaining_credits,
+                "total": FREE_CREDIT_USD,
+                "used": used_credits,
+                "percent_remaining": credit_pct,
+                "unit": "usd"
+            },
+            "billing": {
+                "this_month_spent_usd": used_credits,
+                "monthly_free_credit_usd": FREE_CREDIT_USD,
+                "estimated_remaining_credit_usd": remaining_credits,
+                "billed_cost_usd": round(billed, 4),
+                "breakdown": breakdown,
+                "adjustments": adjustments
+            }
+        }
+    except Exception as err:
+        return {
+            "available": False,
+            "remaining_credits": None,
+            "credit_unit": "usd",
+            "error": str(err)
+        }
+
+

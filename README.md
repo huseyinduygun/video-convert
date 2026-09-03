@@ -105,6 +105,21 @@ $payload['storage_pass'] = encryptStoragePass('videoCdn500!');
   "vtt_url": "https://cdn.domain.com/huseyin/6733a252/thumbnails.vtt",
   "info_json_url": "https://cdn.domain.com/huseyin/6733a252/info.json",
   "qualities": ["360p", "720p", "1080p"],
+  "remaining_credits": 29.9823,
+  "credit_unit": "usd",
+  "credits": {
+    "remaining": 29.9823,
+    "total": 30.00,
+    "used": 0.0177,
+    "percent_remaining": 99.94,
+    "unit": "usd"
+  },
+  "billing": {
+    "this_month_spent_usd": 0.0177,
+    "monthly_free_credit_usd": 30.00,
+    "estimated_remaining_credit_usd": 29.9823,
+    "billed_cost_usd": 0.0
+  },
   "elapsed_time_seconds": 45.2,
   "processing_time": "45.2s",
   "perf_stats": {
@@ -214,6 +229,44 @@ $payload['storage_pass'] = encryptStoragePass('videoCdn500!');
     "cost_estimate": {
       "total_cost_usd": 0.0001,
       "formatted": "$0.0001"
+    }
+  }
+}
+```
+
+---
+
+## 💳 Kalan Kredi / Bakiye Sorgulama Endpoint'i (`POST /billing_request`)
+
+Video dönüştürmeyi beklemeden, PHP backend veya admin panelinizden Modal'ın o anki kalan ücretsiz kredisini ve aylık harcamasını sorgulamak için kullanılır:
+
+```bash
+curl -X POST "https://<workspace>--modalvideocdn-billing-request.modal.run" \
+  -H "Content-Type: application/json" \
+  -H "X-Admin-Token: hls_adm_7f9c2e4a1b8d3f5e6a0b9c8d7e6f5a4b3c2d1e0f9a8b7c6d"
+```
+
+**Yanıt Örneği:**
+```json
+{
+  "status": "success",
+  "remaining_credits": 29.9823,
+  "credit_unit": "usd",
+  "credits": {
+    "remaining": 29.9823,
+    "total": 30.00,
+    "used": 0.0177,
+    "percent_remaining": 99.94,
+    "unit": "usd"
+  },
+  "billing": {
+    "this_month_spent_usd": 0.0177,
+    "monthly_free_credit_usd": 30.00,
+    "estimated_remaining_credit_usd": 29.9823,
+    "billed_cost_usd": 0.0,
+    "breakdown": {
+      "Volumes": 0.0176,
+      "Deployed Apps": 0.0018
     }
   }
 }
