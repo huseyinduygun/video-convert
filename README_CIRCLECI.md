@@ -369,6 +369,21 @@ Sistem işlem boyunca aşağıdaki adımlarda `webhook_url` adresinize HTTP POST
   "vtt_url": "https://video-cdn.xfoy.dev/huseyin/cir_7a8b9c0d/thumbnails.vtt",
   "info_json_url": "https://video-cdn.xfoy.dev/huseyin/cir_7a8b9c0d/info.json",
   "qualities": ["360p", "720p"],
+  "remaining_credits": 24969.0,
+  "credit_unit": "credits",
+  "credits": {
+    "remaining": 24969.0,
+    "total": 30000.0,
+    "job_used": 31.0,
+    "percent_remaining": 83.23,
+    "unit": "credits"
+  },
+  "billing": {
+    "job_cost": 31.0,
+    "monthly_limit": 30000.0,
+    "estimated_remaining": 24969.0,
+    "unit": "credits"
+  },
   "elapsed_time_seconds": 18.5,
   "processing_time": "18.5s",
   "runner": "circleci",

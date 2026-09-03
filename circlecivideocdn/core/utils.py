@@ -426,3 +426,50 @@ def build_web_base_url(cdn_domain: str, web_dir: str, username: str, video_id: s
     if clean_web_dir:
         return f"{clean_domain}/{clean_web_dir}/{username}/{video_id}"
     return f"{clean_domain}/{username}/{video_id}"
+
+
+def calculate_circleci_credits(elapsed_sec: float, input_data: dict = None) -> dict:
+    """
+    CircleCI Kredi & Kota Hesaplama:
+    CircleCI Medium (2 vCPU, 4GB RAM) makinesi dakikada 10 kredi (0.1667 kredi/sn) harcar.
+    Aylık Free Tier kotası: 30.000 kredidir.
+    """
+    input_data = input_data or {}
+    TOTAL_CREDITS = float(os.environ.get("CIRCLECI_TOTAL_CREDITS") or input_data.get("total_credits") or 30000.0)
+
+    # Bu işleme ait kredi tüketimi: 1 dakika = 10 kredi
+    job_credits = round((elapsed_sec / 60.0) * 10.0, 2)
+
+    raw_current = (
+        input_data.get("current_credits")
+        or input_data.get("remaining_credits")
+        or os.environ.get("CIRCLECI_REMAINING_CREDITS")
+    )
+    if raw_current is not None:
+        try:
+            rem_val = max(0.0, round(float(raw_current) - job_credits, 2))
+        except (ValueError, TypeError):
+            rem_val = max(0.0, round(TOTAL_CREDITS - job_credits, 2))
+    else:
+        rem_val = max(0.0, round(TOTAL_CREDITS - job_credits, 2))
+
+    pct_rem = round((rem_val / TOTAL_CREDITS) * 100, 2) if TOTAL_CREDITS > 0 else 0.0
+
+    return {
+        "remaining_credits": rem_val,
+        "credit_unit": "credits",
+        "credits": {
+            "remaining": rem_val,
+            "total": TOTAL_CREDITS,
+            "job_used": job_credits,
+            "percent_remaining": pct_rem,
+            "unit": "credits"
+        },
+        "billing": {
+            "job_cost": job_credits,
+            "monthly_limit": TOTAL_CREDITS,
+            "estimated_remaining": rem_val,
+            "unit": "credits"
+        }
+    }
+

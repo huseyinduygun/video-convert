@@ -424,6 +424,21 @@ Sistem işlem boyunca aşağıdaki adımlarda `webhook_url` adresinize HTTP POST
   "vtt_url": "https://video-cdn.xfoy.dev/huseyin/sem_32a689e0/thumbnails.vtt",
   "info_json_url": "https://video-cdn.xfoy.dev/huseyin/sem_32a689e0/info.json",
   "qualities": ["360p", "720p"],
+  "remaining_credits": 798.0,
+  "credit_unit": "minutes",
+  "credits": {
+    "remaining": 798.0,
+    "total": 1000.0,
+    "job_used": 0.31,
+    "percent_remaining": 79.8,
+    "unit": "minutes"
+  },
+  "billing": {
+    "job_cost": 0.31,
+    "monthly_limit": 1000.0,
+    "estimated_remaining": 798.0,
+    "unit": "minutes"
+  },
   "elapsed_time_seconds": 18.5,
   "processing_time": "18.5s",
   "runner": "semaphore-ci",

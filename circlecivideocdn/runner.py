@@ -32,6 +32,7 @@ from .core.utils import (
     build_accumulated_perf_stats,
     build_web_base_url,
     calc_target_dim,
+    calculate_circleci_credits,
     decrypt_storage_pass,
     generate_metadata_and_poster,
     generate_smart_posters,
@@ -692,6 +693,13 @@ def run_conversion(data: dict = None) -> int:
 
         primary_poster_url = f"{base_web_url}/poster.jpg" if has_poster else (posters_list[0] if posters_list else None)
 
+        perf_stats = build_accumulated_perf_stats(work_dir, start_time)
+        credit_info = calculate_circleci_credits(total_elapsed, data)
+        if credit_info.get("credits"):
+            perf_stats["credits"] = credit_info["credits"]
+        if credit_info.get("billing"):
+            perf_stats["billing"] = credit_info["billing"]
+
         tracker.send_event(step="completed", progress=100, status="completed", extra={
             "duration_seconds": round(probe_dur, 2),
             "duration": round(probe_dur, 2),
@@ -707,9 +715,13 @@ def run_conversion(data: dict = None) -> int:
             "vtt_url": f"{base_web_url}/thumbnails.vtt" if has_sprite else None,
             "info_json_url": f"{base_web_url}/info.json",
             "qualities": [p["name"] for p in active_profiles],
+            "remaining_credits": credit_info.get("remaining_credits"),
+            "credit_unit": credit_info.get("credit_unit", "credits"),
+            "credits": credit_info.get("credits"),
+            "billing": credit_info.get("billing"),
             "elapsed_time_seconds": total_elapsed,
             "processing_time": f"{total_elapsed}s",
-            "perf_stats": build_accumulated_perf_stats(work_dir, start_time)
+            "perf_stats": perf_stats
         })
 
         print(f"[{video_id}] Video dönüştürme ve yükleme başarıyla tamamlandı! Toplam Süre: {total_elapsed}s")

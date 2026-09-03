@@ -493,3 +493,49 @@ def build_accumulated_perf_stats(work_dir: str, start_time: float) -> dict:
         stats["resource_usage"] = conv_perf["resource_usage"]
 
     return stats
+
+
+def calculate_semaphore_credits(elapsed_sec: float, input_data: dict = None) -> dict:
+    """
+    Semaphore CI Kota & Kredi Hesaplama:
+    Semaphore Free Tier: Aylık 1000 işlem dakikası (veya $10 bütçe) tanımlar.
+    """
+    input_data = input_data or {}
+    TOTAL_MINUTES = float(os.environ.get("SEMAPHORE_TOTAL_MINUTES") or input_data.get("total_minutes") or 1000.0)
+
+    # Bu işleme ait harcanan süre (dakika cinsinden)
+    job_minutes = round(elapsed_sec / 60.0, 2)
+
+    raw_current = (
+        input_data.get("current_credits")
+        or input_data.get("remaining_credits")
+        or os.environ.get("SEMAPHORE_REMAINING_MINUTES")
+    )
+    if raw_current is not None:
+        try:
+            rem_val = max(0.0, round(float(raw_current) - job_minutes, 2))
+        except (ValueError, TypeError):
+            rem_val = max(0.0, round(TOTAL_MINUTES - job_minutes, 2))
+    else:
+        rem_val = max(0.0, round(TOTAL_MINUTES - job_minutes, 2))
+
+    pct_rem = round((rem_val / TOTAL_MINUTES) * 100, 2) if TOTAL_MINUTES > 0 else 0.0
+
+    return {
+        "remaining_credits": rem_val,
+        "credit_unit": "minutes",
+        "credits": {
+            "remaining": rem_val,
+            "total": TOTAL_MINUTES,
+            "job_used": job_minutes,
+            "percent_remaining": pct_rem,
+            "unit": "minutes"
+        },
+        "billing": {
+            "job_cost": job_minutes,
+            "monthly_limit": TOTAL_MINUTES,
+            "estimated_remaining": rem_val,
+            "unit": "minutes"
+        }
+    }
+
