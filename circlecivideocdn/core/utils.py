@@ -428,11 +428,58 @@ def build_web_base_url(cdn_domain: str, web_dir: str, username: str, video_id: s
     return f"{clean_domain}/{username}/{video_id}"
 
 
+def fetch_circleci_live_usage(token: str) -> float:
+    """
+    CircleCI Insights API üzerinden son 30 günde harcanan toplam compute kredisini çeker.
+    """
+    if not token or not str(token).strip():
+        return None
+
+    clean_tok = str(token).strip()
+    import urllib.request
+
+    username = os.environ.get("CIRCLE_PROJECT_USERNAME")
+    reponame = os.environ.get("CIRCLE_PROJECT_REPONAME")
+
+    candidate_slugs = []
+    if username and reponame:
+        candidate_slugs.extend([f"gl/{username}/{reponame}", f"gh/{username}/{reponame}"])
+
+    # Eğer env'den gelmediyse bilinen proje slug'ını dene
+    candidate_slugs.extend(["gl/huseyinduygun/video-convert", "gh/huseyinduygun/video-convert"])
+
+    for slug in candidate_slugs:
+        url = f"https://circleci.com/api/v2/insights/{slug}/workflows?reporting-window=last-30-days"
+        req = urllib.request.Request(
+            url,
+            headers={
+                "Circle-Token": clean_tok,
+                "Accept": "application/json",
+                "User-Agent": "CircleCIVideoCDN/1.0"
+            }
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=4) as res:
+                body = json.loads(res.read().decode("utf-8"))
+                items = body.get("items", [])
+                total_used = 0.0
+                for it in items:
+                    metrics = it.get("metrics", {})
+                    total_used += float(metrics.get("total_credits_used", 0.0))
+                if items:
+                    return round(total_used, 2)
+        except Exception:
+            pass
+
+    return None
+
+
 def calculate_circleci_credits(elapsed_sec: float, input_data: dict = None) -> dict:
     """
     CircleCI Kredi & Kota Hesaplama:
     CircleCI Medium (2 vCPU, 4GB RAM) makinesi dakikada 10 kredi (0.1667 kredi/sn) harcar.
     Aylık Free Tier kotası: 30.000 kredidir.
+    Eğer circle_token parametresi verilirse CircleCI Insights API'sinden canlı harcanan krediyi çeker.
     """
     input_data = input_data or {}
     TOTAL_CREDITS = float(os.environ.get("CIRCLECI_TOTAL_CREDITS") or input_data.get("total_credits") or 30000.0)
@@ -440,18 +487,33 @@ def calculate_circleci_credits(elapsed_sec: float, input_data: dict = None) -> d
     # Bu işleme ait kredi tüketimi: 1 dakika = 10 kredi
     job_credits = round((elapsed_sec / 60.0) * 10.0, 2)
 
-    raw_current = (
-        input_data.get("current_credits")
-        or input_data.get("remaining_credits")
-        or os.environ.get("CIRCLECI_REMAINING_CREDITS")
+    # 1. Yöntem: CircleCI API Token ile canlı kullanım sorgusu dene
+    api_token = (
+        input_data.get("circle_token")
+        or input_data.get("circleci_token")
+        or input_data.get("api_token")
+        or input_data.get("token")
+        or os.environ.get("CIRCLE_TOKEN")
+        or os.environ.get("CIRCLECI_TOKEN")
     )
-    if raw_current is not None:
-        try:
-            rem_val = max(0.0, round(float(raw_current) - job_credits, 2))
-        except (ValueError, TypeError):
-            rem_val = max(0.0, round(TOTAL_CREDITS - job_credits, 2))
+    live_used_credits = fetch_circleci_live_usage(api_token) if api_token else None
+
+    if live_used_credits is not None:
+        rem_val = max(0.0, round(TOTAL_CREDITS - live_used_credits, 2))
     else:
-        rem_val = max(0.0, round(TOTAL_CREDITS - job_credits, 2))
+        # 2. Yöntem: PHP'den gelen güncel bakiye üzerinden düş
+        raw_current = (
+            input_data.get("current_credits")
+            or input_data.get("remaining_credits")
+            or os.environ.get("CIRCLECI_REMAINING_CREDITS")
+        )
+        if raw_current is not None:
+            try:
+                rem_val = max(0.0, round(float(raw_current) - job_credits, 2))
+            except (ValueError, TypeError):
+                rem_val = max(0.0, round(TOTAL_CREDITS - job_credits, 2))
+        else:
+            rem_val = max(0.0, round(TOTAL_CREDITS - job_credits, 2))
 
     pct_rem = round((rem_val / TOTAL_CREDITS) * 100, 2) if TOTAL_CREDITS > 0 else 0.0
 
@@ -462,6 +524,7 @@ def calculate_circleci_credits(elapsed_sec: float, input_data: dict = None) -> d
             "remaining": rem_val,
             "total": TOTAL_CREDITS,
             "job_used": job_credits,
+            "live_synced": live_used_credits is not None,
             "percent_remaining": pct_rem,
             "unit": "credits"
         },
@@ -472,4 +535,5 @@ def calculate_circleci_credits(elapsed_sec: float, input_data: dict = None) -> d
             "unit": "credits"
         }
     }
+
 

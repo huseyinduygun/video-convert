@@ -495,10 +495,52 @@ def build_accumulated_perf_stats(work_dir: str, start_time: float) -> dict:
     return stats
 
 
+def fetch_semaphore_live_usage(token: str) -> float:
+    """
+    Semaphore CI API üzerinden bu ayki harcanan toplam işlem dakikasını çeker.
+    """
+    if not token or not str(token).strip():
+        return None
+
+    clean_tok = str(token).strip()
+    import urllib.request
+
+    org_url = os.environ.get("SEMAPHORE_ORGANIZATION_URL")
+    candidate_urls = []
+    if org_url:
+        clean_org = org_url.rstrip("/")
+        candidate_urls.extend([
+            f"{clean_org}/api/v1alpha/insights/spending",
+            f"{clean_org}/api/v1alpha/usage",
+            f"{clean_org}/api/v1alpha/spending"
+        ])
+
+    for url in candidate_urls:
+        req = urllib.request.Request(
+            url,
+            headers={
+                "Authorization": f"Token {clean_tok}",
+                "Accept": "application/json",
+                "User-Agent": "SemaphoreCI v2.0 Client"
+            }
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=4) as res:
+                body = json.loads(res.read().decode("utf-8"))
+                used = body.get("minutes_used") or body.get("used_minutes") or body.get("total_minutes")
+                if used is not None:
+                    return float(used)
+        except Exception:
+            pass
+
+    return None
+
+
 def calculate_semaphore_credits(elapsed_sec: float, input_data: dict = None) -> dict:
     """
     Semaphore CI Kota & Kredi Hesaplama:
     Semaphore Free Tier: Aylık 1000 işlem dakikası (veya $10 bütçe) tanımlar.
+    Eğer semaphore_token parametresi verilirse Semaphore API'sinden canlı harcanan dakikayı çeker.
     """
     input_data = input_data or {}
     TOTAL_MINUTES = float(os.environ.get("SEMAPHORE_TOTAL_MINUTES") or input_data.get("total_minutes") or 1000.0)
@@ -506,18 +548,32 @@ def calculate_semaphore_credits(elapsed_sec: float, input_data: dict = None) -> 
     # Bu işleme ait harcanan süre (dakika cinsinden)
     job_minutes = round(elapsed_sec / 60.0, 2)
 
-    raw_current = (
-        input_data.get("current_credits")
-        or input_data.get("remaining_credits")
-        or os.environ.get("SEMAPHORE_REMAINING_MINUTES")
+    # 1. Yöntem: Semaphore API Token ile canlı kullanım sorgusu dene
+    api_token = (
+        input_data.get("semaphore_token")
+        or input_data.get("api_token")
+        or input_data.get("token")
+        or os.environ.get("SEMAPHORE_API_TOKEN")
+        or os.environ.get("SEMAPHORE_TOKEN")
     )
-    if raw_current is not None:
-        try:
-            rem_val = max(0.0, round(float(raw_current) - job_minutes, 2))
-        except (ValueError, TypeError):
-            rem_val = max(0.0, round(TOTAL_MINUTES - job_minutes, 2))
+    live_used_minutes = fetch_semaphore_live_usage(api_token) if api_token else None
+
+    if live_used_minutes is not None:
+        rem_val = max(0.0, round(TOTAL_MINUTES - live_used_minutes, 2))
     else:
-        rem_val = max(0.0, round(TOTAL_MINUTES - job_minutes, 2))
+        # 2. Yöntem: PHP'den gelen güncel bakiye üzerinden düş
+        raw_current = (
+            input_data.get("current_credits")
+            or input_data.get("remaining_credits")
+            or os.environ.get("SEMAPHORE_REMAINING_MINUTES")
+        )
+        if raw_current is not None:
+            try:
+                rem_val = max(0.0, round(float(raw_current) - job_minutes, 2))
+            except (ValueError, TypeError):
+                rem_val = max(0.0, round(TOTAL_MINUTES - job_minutes, 2))
+        else:
+            rem_val = max(0.0, round(TOTAL_MINUTES - job_minutes, 2))
 
     pct_rem = round((rem_val / TOTAL_MINUTES) * 100, 2) if TOTAL_MINUTES > 0 else 0.0
 
@@ -528,6 +584,7 @@ def calculate_semaphore_credits(elapsed_sec: float, input_data: dict = None) -> 
             "remaining": rem_val,
             "total": TOTAL_MINUTES,
             "job_used": job_minutes,
+            "live_synced": live_used_minutes is not None,
             "percent_remaining": pct_rem,
             "unit": "minutes"
         },
@@ -538,4 +595,5 @@ def calculate_semaphore_credits(elapsed_sec: float, input_data: dict = None) -> 
             "unit": "minutes"
         }
     }
+
 
