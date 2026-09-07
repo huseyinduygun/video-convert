@@ -364,7 +364,8 @@ def generate_metadata_and_poster(
     """Videonun info.json metadata dosyasını üretir."""
     poster_path = f"{work_dir}/poster.jpg"
     has_poster = os.path.exists(poster_path)
-    has_sprite = os.path.exists(f"{work_dir}/sprite.jpg") and os.path.exists(f"{work_dir}/thumbnails.vtt")
+    has_sprite = os.path.exists(f"{work_dir}/sprite.jpg")
+    has_vtt = os.path.exists(f"{work_dir}/thumbnails.vtt")
     has_encryption = os.path.exists(f"{work_dir}/is_encrypted.flag")
 
     encrypted_key_url = None
@@ -417,7 +418,7 @@ def generate_metadata_and_poster(
         "poster_url": primary_poster_url,
         "posters": posters_list if posters_list else ([primary_poster_url] if primary_poster_url else []),
         "sprite_url": f"{base_web_url}/sprite.jpg" if has_sprite else None,
-        "vtt_url": f"{base_web_url}/thumbnails.vtt" if has_sprite else None,
+        "vtt_url": f"{base_web_url}/thumbnails.vtt" if has_vtt else None,
         "info_json_url": f"{base_web_url}/info.json",
         "created_at": time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
     }

@@ -153,7 +153,7 @@ def run_conversion(data: dict = None) -> int:
     raw_domain = data.get("cdn_domain") or data.get("domain") or data.get("cdn_url")
     raw_username = data.get("username") or data.get("user")
     custom_id = data.get("custom_id") or data.get("id") or data.get("external_id")
-    video_id = data.get("video_id") or (os.environ.get("CI_PIPELINE_ID") and f"gl_{os.environ.get('CI_PIPELINE_ID')}") or str(int(start_time))[-8:]
+    video_id = data.get("video_id") or (os.environ.get("CI_PIPELINE_ID") and str(os.environ.get("CI_PIPELINE_ID"))) or str(int(start_time))[-8:]
     custom_id = custom_id or video_id
 
     qualities = data.get("qualities")
@@ -692,6 +692,7 @@ def run_conversion(data: dict = None) -> int:
         base_web_url = build_web_base_url(cdn_domain, web_dir, username, video_id)
         has_poster = os.path.exists(f"{work_dir}/poster.jpg")
         has_sprite = os.path.exists(f"{work_dir}/sprite.jpg")
+        has_vtt = os.path.exists(f"{work_dir}/thumbnails.vtt")
 
         posters_list = []
         for i in [1, 2, 3]:
@@ -719,7 +720,7 @@ def run_conversion(data: dict = None) -> int:
             "poster": primary_poster_url,
             "posters": posters_list if posters_list else ([primary_poster_url] if primary_poster_url else []),
             "sprite_url": f"{base_web_url}/sprite.jpg" if has_sprite else None,
-            "vtt_url": f"{base_web_url}/thumbnails.vtt" if has_sprite else None,
+            "vtt_url": f"{base_web_url}/thumbnails.vtt" if has_vtt else None,
             "info_json_url": f"{base_web_url}/info.json",
             "qualities": [p["name"] for p in active_profiles],
             "remaining_credits": credit_info.get("remaining_credits"),

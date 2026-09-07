@@ -160,7 +160,7 @@ def run_conversion(data: dict = None) -> int:
 
     # CircleCI workflow veya build numarasını video_id fallback olarak kullan
     circ_wf_id = os.environ.get("CIRCLE_WORKFLOW_ID") or os.environ.get("CIRCLE_WORKFLOW_JOB_ID") or os.environ.get("CIRCLE_BUILD_NUM")
-    video_id = data.get("video_id") or (circ_wf_id and f"cir_{str(circ_wf_id)[:8]}") or str(int(start_time))[-8:]
+    video_id = data.get("video_id") or (circ_wf_id and str(circ_wf_id)[:8]) or str(int(start_time))[-8:]
     custom_id = custom_id or video_id
 
     qualities = data.get("qualities")
@@ -685,6 +685,7 @@ def run_conversion(data: dict = None) -> int:
         base_web_url = build_web_base_url(cdn_domain, web_dir, username, video_id)
         has_poster = os.path.exists(f"{work_dir}/poster.jpg")
         has_sprite = os.path.exists(f"{work_dir}/sprite.jpg")
+        has_vtt = os.path.exists(f"{work_dir}/thumbnails.vtt")
 
         posters_list = []
         for i in [1, 2, 3]:
@@ -712,7 +713,7 @@ def run_conversion(data: dict = None) -> int:
             "poster": primary_poster_url,
             "posters": posters_list if posters_list else ([primary_poster_url] if primary_poster_url else []),
             "sprite_url": f"{base_web_url}/sprite.jpg" if has_sprite else None,
-            "vtt_url": f"{base_web_url}/thumbnails.vtt" if has_sprite else None,
+            "vtt_url": f"{base_web_url}/thumbnails.vtt" if has_vtt else None,
             "info_json_url": f"{base_web_url}/info.json",
             "qualities": [p["name"] for p in active_profiles],
             "remaining_credits": credit_info.get("remaining_credits"),
